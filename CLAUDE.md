@@ -57,6 +57,6 @@ bash tools/upstream-baseline/run.sh
 ```
 
 ```powershell
-# TS 版（ts/，Node 24 直接跑 .ts，pnpm）：类型检查（含类型样板）+ SQLite 单测；设了 EQTS_MYSQL_URLS / EQTS_PG_URLS 时再跑 MySQL / PG 实库套件
+# TS 版（ts/，Node 24 直接跑 .ts，pnpm）：类型检查（含类型样板）+ SQLite 单测；设了 EQTS_MYSQL_URLS / EQTS_PG_URLS / EQTS_HANA_URL（hana://SYSTEM:密码@127.0.0.1:39041，密码见 .local/db.env）时再跑对应的实库套件
 cd ts; pnpm install; pnpm run typecheck; $env:EQTS_MYSQL_URLS='mysql://root:root@127.0.0.1:3318,mysql://root:root@127.0.0.1:3306'; $env:EQTS_PG_URLS='postgres://postgres:postgres@127.0.0.1:54321/easy-query-test'; pnpm test
 ```

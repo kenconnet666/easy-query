@@ -1,0 +1,18 @@
+{
+  "name": "@eqts/hana",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@eqts/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "hdb": "^2.30.0"
+  },
+  "devDependencies": {
+    "hdb": "2.30.1"
+  }
+}

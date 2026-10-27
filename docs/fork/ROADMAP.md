@@ -68,7 +68,7 @@ M3b：
 - [x] T0 设计文档 [decisions/0002-ts-design.md](decisions/0002-ts-design.md) 与类型样板：50 实体 / 5 层导航 tsc 0.15s，无 TS2589；结果类型正例与负例固定在 `ts/packages/core/test/*.check.ts`
 - [x] T1 核心 AST + SQLite（node:sqlite，零基础设施）+ MySQL（mysql2，8.0.18 与 8.4 实测）：CRUD、where/select/orderBy/分页、分组、事务、写入无条件保护
 - [x] T2 导航：隐式 join（可空推导）、隐式子查询（any/none/count/sum/avg/max/min）、toList 对象树（每层一条 IN 查询）、include
-- [ ] T3 HANA（@sap/hana-client）与方言静态入口；按主键整行更新（已完成：PG 适配 `@eqts/pg`；拦截器 tenant / touch / 自定义；upsert onConflict merge / ignore；窗口函数 `win.*`；toList `limit(n)` / `first()`——四个库实测）
+- [ ] T3 方言静态入口；按主键整行更新（已完成：PG 适配 `@eqts/pg`；HANA 适配 `@eqts/hana`（hdb，HANA 2.0 实测）；拦截器 tenant / touch / 自定义；upsert onConflict merge / ignore；窗口函数 `win.*`；toList `limit(n)` / `first()`——四个库实测）
 - [ ] T4 `pull`：从现有库生成 schema 文件（进 BACKLOG，T3 后视情况）
 - [x] CI 加 ts job：typecheck（含类型样板）、SQLite 单测、MySQL 8.0.18 服务容器跑共用套件
 
