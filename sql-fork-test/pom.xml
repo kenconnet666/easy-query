@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>com.easy-query</groupId>
+        <artifactId>easy-query-all</artifactId>
+        <version>3.3.1</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <!--
+        fork 自己的测试（不发布）：标准的 src/test/java，`mvn test` 就能跑，CI 用它。
+        - 默认只跑不连库的用例：SQL 文本断言、H2 内存库，以及上游 sql-test 里不需要库的那批（UpstreamNoDatabaseSuite）。
+        - 连本地实库（infra/dev）的用例放在 live 包下，加 -Plive 才跑。
+        依赖上游的 sql-test（test 作用域）：各方言、驱动、APT 处理器与上游的测试实体都从它来，不改上游的测试模块。
+    -->
+    <name>sql-fork-test</name>
+    <artifactId>sql-fork-test</artifactId>
+
+    <properties>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.install.skip>true</maven.install.skip>
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.javadoc.skip>true</maven.javadoc.skip>
+        <maven.source.skip>true</maven.source.skip>
+        <gpg.skip>true</gpg.skip>
+        <fork.test.excludes>**/live/**</fork.test.excludes>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.easy-query</groupId>
+            <artifactId>sql-test</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.5.2</version>
+                <configuration>
+                    <includes>
+                        <include>**/*Test.java</include>
+                        <include>**/*Suite.java</include>
+                    </includes>
+                    <excludes>
+                        <exclude>${fork.test.excludes}</exclude>
+                    </excludes>
+                    <argLine>-Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai</argLine>
+                    <trimStackTrace>false</trimStackTrace>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- 连 infra/dev 的本地实库：bash infra/dev/db.sh up -d（HANA、PolarDB 基线另加 profile） -->
+        <profile>
+            <id>live</id>
+            <properties>
+                <fork.test.excludes>none</fork.test.excludes>
+            </properties>
+        </profile>
+    </profiles>
+</project>
