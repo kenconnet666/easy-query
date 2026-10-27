@@ -402,3 +402,5 @@ nbdist/
 
 # 本地开发数据库密码与连接说明（infra/dev/db.sh 生成）
 /.local/
+# fork：TS 版的 pnpm 包目录（上面 NuGet 的 **/[Pp]ackages/* 规则会误伤）
+!/ts/packages/*
