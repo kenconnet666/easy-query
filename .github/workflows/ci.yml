@@ -45,3 +45,34 @@ jobs:
           cache: maven
       - name: 构建 sql-springboot4-starter 及其依赖
         run: bash ./mvnw -B -T 2 -Dgpg.skip=true -Dmaven.javadoc.skip=true -Dmaven.source.skip=true -DskipTests -pl sql-extension/sql-springboot4-starter -am install
+
+  # TS 版（ts/）：类型检查（含 50 实体类型样板）+ SQLite 单测 + 在 MySQL 8.0.18（PolarDB 基线）上跑共用套件
+  ts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ts
+    services:
+      mysql:
+        image: mysql:8.0.18
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -uroot -proot" --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: ts/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: ts/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm test
+        env:
+          EQTS_MYSQL_URLS: mysql://root:root@127.0.0.1:3306
