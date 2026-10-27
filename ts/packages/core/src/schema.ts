@@ -95,8 +95,12 @@ export function utcText(d: Date): string {
 function toDate(raw: unknown): Date {
   if (raw instanceof Date) return raw
   const text = String(raw)
-  // 'YYYY-MM-DD HH:MM:SS[.fff]' 按 UTC 读
-  return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(text) ? text : text.replace(' ', 'T') + 'Z')
+  // 'YYYY-MM-DD HH:MM:SS[.fff]' 按 UTC 读；带偏移的（PG timestamptz 的 '+00'、'+08:00'）按偏移读
+  const iso = text.replace(' ', 'T')
+  if (/[zZ]$/.test(iso)) return new Date(iso)
+  const offset = /([+-]\d\d)(?::?(\d\d))?$/.exec(iso)
+  if (offset && offset.index > 10) return new Date(`${iso.slice(0, offset.index)}${offset[1]}:${offset[2] ?? '00'}`)
+  return new Date(iso + 'Z')
 }
 
 function toDateText(raw: unknown): string {
@@ -122,7 +126,8 @@ export const col = {
   /** 精确小数：JS 里是文字，不经过浮点 */
   decimal: (_precision?: number, _scale?: number) => base(codec<string>('decimal', (r) => String(r))),
   double: () => base(codec<number>('double', (r) => Number(r))),
-  boolean: () => base(codec<boolean>('boolean', (r) => r === true || r === 1 || r === '1' || r === 1n, (v) => (v ? 1 : 0))),
+  /** 绑定时交给方言转换（SQLite / MySQL 写 1 / 0，PG 原样传布尔） */
+  boolean: () => base(codec<boolean>('boolean', (r) => r === true || r === 1 || r === '1' || r === 1n || r === 't')),
   /** 日历日期 'YYYY-MM-DD'，不经过时区 */
   date: () => base(codec<string>('date', toDateText)),
   /** 一天里的时刻 'HH:MM:SS' */

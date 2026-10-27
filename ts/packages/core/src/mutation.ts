@@ -7,7 +7,7 @@ import { condNode, Expr, toNode, type Cond } from './expr.ts'
 import { REF, Scope, type Ref } from './ref.ts'
 import type { AnySchema, EntityKey } from './relations.ts'
 import type { Entity, Insert, ValueOf } from './schema.ts'
-import { execute, type Context } from './session.ts'
+import { execute, query, type Context } from './session.ts'
 
 type EntityOf<S extends AnySchema, K extends EntityKey<S>> = S['entities'][K]
 
@@ -49,9 +49,22 @@ export class InsertValues {
   async returnId(): Promise<number | bigint> {
     const statements = this.toSQL()
     if (this.rows.length !== 1 || statements.length !== 1) throw new Error('returnId() needs exactly one row')
+    if (this.ctx.dialect.generatedKeys === 'returning') return this.returnIdByReturning(statements[0]!)
     const result = await execute(this.ctx, statements[0]!)
     if (result.insertId === undefined) throw new Error(`the ${this.ctx.dialect.name} driver did not report a generated key`)
     return result.insertId
+  }
+
+  private async returnIdByReturning(statement: Statement): Promise<number | bigint> {
+    const key = this.entity.primaryKey[0]
+    if (key === undefined) throw new Error(`returnId() needs a primary key on ${this.entity.table}`)
+    const rows = await query(this.ctx, { sql: statement.sql + this.ctx.dialect.returning(this.entity.columnNames[key]!), params: statement.params })
+    const value = rows[0] ? Object.values(rows[0])[0] : undefined
+    if (value === undefined || value === null) throw new Error(`insert into ${this.entity.table} returned no key`)
+    if (typeof value === 'number' || typeof value === 'bigint') return value
+    // int8 以文字返回：安全范围内给 number，超出给 bigint
+    const n = Number(value)
+    return Number.isSafeInteger(n) ? n : BigInt(String(value))
   }
 
   toSQL(): Statement[] {
