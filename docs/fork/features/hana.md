@@ -46,6 +46,11 @@ Spring Boot / Solon：`easy-query.database=hana`。
 - 带格式的日期只认 yyyy yy MM dd HH hh mm ss S…（≤7 位） a 和单字母 M d H m s；其余模式字母报错。
 - `length` / `indexOf` / `subString` 按 UTF-16 单元计，emoji 等补充字符与 MySQL 的按字符计数不同。
 
-## 还没做（M2 后半）
+## 生成键与时间
 
-生成键回填（`CURRENT_IDENTITY_VALUE()`）、时间按 UTC 绑定、LOB 的流式读写、迁移 DDL（`CREATE COLUMN TABLE` 等）。
+- `executeRows(true)` 回填自增主键：ngdbc 不支持 getGeneratedKeys，HANA 方言逐行插入，每行后在同一连接上取 `SELECT CURRENT_IDENTITY_VALUE() FROM DUMMY`（只支持一个 IDENTITY 列；表上的 INSERT 触发器若又往别的 IDENTITY 表插行，取到的会是那个值）。不回填时照常批量。
+- LocalDateTime 在 UTC 日历下读写：JVM 时区有夏令时时，跳过那一小时里的时刻也原样进出。
+
+## 还没做
+
+LOB 的流式读写、迁移 DDL（`CREATE COLUMN TABLE` 等）。
