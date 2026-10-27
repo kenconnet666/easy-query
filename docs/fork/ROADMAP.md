@@ -65,7 +65,7 @@ M3b：
 
 ## M5 TS 版（本仓库 `ts/`，pnpm workspace；不追求与 Java 生成逐字相同的 SQL，只共享概念与命名）
 
-- [ ] T0 设计文档 `decisions/0002-ts-design.md`：schema 对象定义实体与关系；查询 `db.queryable(User).where(u => [...]).select(u => ({...}))`，条件返回表达式（数组里 false/undefined 跳过）；导航与隐式子查询 `u.posts.any(...)`；对象树 select 结果类型全推导；方言开放注册、专属函数与 Java 同形；驱动可选 peer 依赖；类型性能预算。用最新稳定版 TypeScript，Node ESM
+- [!] T0 设计文档 [decisions/0002-ts-design.md](decisions/0002-ts-design.md)（草案已写，待用户审阅；审阅通过前只做类型样板）：schema 对象定义实体与关系；查询 `db.queryable(User).where(u => [...]).select(u => ({...}))`，条件返回表达式（数组里 false/undefined 跳过）；导航与隐式子查询 `u.posts.any(...)`；对象树 select 结果类型全推导；方言开放注册、专属函数与 Java 同形；驱动可选 peer 依赖；类型性能预算。用最新稳定版 TypeScript，Node ESM
 - [ ] T1 核心 AST + SQLite（node:sqlite，零基础设施）+ MySQL（mysql2）：单表 CRUD、where/select/orderBy/分页、事务
 - [ ] T2 导航：隐式 join、隐式子查询（any/none/count/sum/max/min/toList）、include、对象树 select
 - [ ] T3 PG（pg）、HANA（@sap/hana-client）与方言静态入口
@@ -78,7 +78,7 @@ M3b：
 - [ ] 文档索引 `docs/fork/README.md`
 - [ ] 列出可回馈上游的分支与说明（由用户去开上游 PR）
 
-## flow 验收（M3a 起）
+## flow 验收（M3a 起，详见 [flow.md](flow.md)）
 
 - flow 仓库建本地分支 `eq-fork-acceptance`，**只提交本地、不推送**。
 - fork 产物在临时 worktree 里 `versions:set 3.3.1-ext-SNAPSHOT` 后 install，主线 pom 不改版本。

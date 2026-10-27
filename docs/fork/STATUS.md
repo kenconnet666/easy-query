@@ -14,5 +14,8 @@
 
 ## 待决（不阻塞，用户有空时看）
 
-- 生产 PolarDB 版本串 `8.0.18-X-Cluster-1.0.4`：请在生产执行 `SELECT @@version, @@version_comment;`，核对本地替身是否同一内核系列。
-- TS 版 T0 设计文档写完后按推荐继续 T1；若用户想先审，告诉我暂停 M5。
+- TS 版设计草案 `decisions/0002-ts-design.md` 待用户审阅；审阅前不开始 T1（T0 的类型样板可以先做）。
+
+## 已确认
+
+- 生产 PolarDB 版本串 `8.0.18-X-Cluster-1.0.4`，用户确认本地替身 `polardbx-engine-2.0:80-8.0.18` 可作基线（镜像已拉取）。
