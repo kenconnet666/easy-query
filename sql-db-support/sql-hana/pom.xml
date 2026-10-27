@@ -26,6 +26,13 @@
             <version>${project.version}</version>
             <scope>compile</scope>
         </dependency>
+        <!-- fork：Hana 方言入口（Hana.text(..) 等）用代理 API；与 sql-mysql / sql-pgsql 相同，由使用方提供 -->
+        <dependency>
+            <groupId>com.easy-query</groupId>
+            <artifactId>sql-api-proxy</artifactId>
+            <version>${project.version}</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 
 </project>

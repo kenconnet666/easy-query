@@ -59,7 +59,7 @@ M3b：
 
 ## M4 方言专属能力（用 M1 的入口）
 
-- [ ] 4.1 HANA：全文 `CONTAINS(…, FUZZY)` 与 `SCORE()`、层级 `HIERARCHY` 函数、表函数与计算视图传参（PLACEHOLDER）
+- [x] 4.1 HANA：`Hana.text(cols).contains / fuzzy / score`（CONTAINS、FUZZY、SCORE）；HANA 2.0 实测。层级 `HIERARCHY` 函数、表函数与计算视图传参（PLACEHOLDER）进 BACKLOG
 - [x] 4.2 PG：jsonb 条件与 `edit`（jsonb_set / #- / ||）、`PgSQL.array`（ANY / cardinality）、`PgSQL.fulltext`（websearch_to_tsquery / ts_rank）；PG 17 实测
 - [x] 4.3 MySQL / PolarDB：JSON 条件（contains、overlaps、hasMember、containsPath）与修改（`edit` → JSON_SET / JSON_REMOVE / JSON_ARRAY_APPEND），全文 `MySQL.match`（M1）；8.0.18 实测。JSON_TABLE / JSON_SEARCH 与 PolarDB 专属语法进 BACKLOG
 

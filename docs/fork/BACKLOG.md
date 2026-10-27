@@ -17,3 +17,4 @@
 - [M3.9] DB2 的 `SKIP LOCKED DATA` 未实测，现在明确报不支持；SQL Server 可用 `WITH (UPDLOCK, ROWLOCK, READPAST)` 表提示实现 skip locked
 - [M3.5] GROUPING SETS（任意指定的分组组合）：需要"键的集合的集合"这种 API，等有具体用例再设计；ROLLUP / CUBE 已覆盖常见的小计总计
 - [M4.3] MySQL JSON_TABLE（把 JSON 数组展开成行，可做 join）、JSON_SEARCH、JSON_KEYS 未做；PolarDB 专属语法（并行查询 hint、IMCI 列存）本地 8.0.18 镜像无法实测
+- [M4.1] HANA 层级函数（HIERARCHY 生成器 + HIERARCHY_DESCENDANTS 等）、表函数与计算视图传参（`"view"(PLACEHOLDER."$$p$$" => ?)`）：都是 FROM 里的表来源而不是列函数，要扩展表来源 API，等有具体用例再做；LINGUISTIC 检索模式未包装

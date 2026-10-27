@@ -30,6 +30,9 @@ List<User> vip = easyEntityQuery.queryable(User.class)
 | `PgSQL.jsonb(col)` | `contains(document)` / `containedBy(document)` | `col::jsonb @> ?::jsonb` / `<@` | |
 | | `hasKey(key)`、`hasAnyKey(keys...)`、`hasAllKeys(keys...)` | `jsonb_exists*(col::jsonb, …)` | 不用 `?` 运算符：会被 JDBC 当成占位符 |
 | | `edit(e -> e.set(path, json).remove(path).merge(document))` | `jsonb_set(…, ?::text[], ?::jsonb, true)` / `… #- ?::text[]` / `… \|\| ?::jsonb` | path 用点分隔（`"a.b"`、`"tags.0"`）；值是 JSON 文字；结果与列同类型，update 里写回 |
+| `Hana.text(cols...)` | `contains(query)` | `CONTAINS(col, ?)` / `CONTAINS((c1, c2), ?)` | EXACT：按词，支持 `"短语"`、`OR`、`-排除`、`*`；**列上要有 FULLTEXT INDEX**，否则按整列值匹配 |
+| | `fuzzy(query, threshold)` | `CONTAINS(cols, ?, FUZZY(0.8))` | 容错匹配，threshold 0–1；索引建议带 `FUZZY SEARCH INDEX ON` |
+| | `score()` | `SCORE()` | 本查询里 CONTAINS 的相关度，select / orderBy 用 |
 | `PgSQL.array(col)` | `has(v)`、`hasAll(vs...)`、`hasAny(vs...)` | `? = ANY(col)`（多个值用 AND / OR 连） | 参数不必与元素类型完全一致；col 要是列（会被引用多次） |
 | | `length()` | `cardinality(col)` | 值 |
 | `PgSQL.fulltext(col)` | `matches([config, ]query)` | `to_tsvector('simple', col) @@ websearch_to_tsquery('simple', ?)` | 搜索引擎式查询串：`a b`、`"a b"`、`a or b`、`-a`；config 默认 `simple`，要走索引须与表达式索引一致 |
