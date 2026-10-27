@@ -42,6 +42,17 @@ public class ZonedTimeColumnSqlTest {
             + " WHERE `created_at` >= ? AND  `completed_at` > date_add(`due_at`, interval (?) day) AND DATE_FORMAT(`seen_at`,'%Y-%m-%d') = ?", sql);
     }
 
+    /** 单独选出一个 Instant 列：要当成单值，不能当实体去找构造器（flow 的 StatsQueries.ops 在 M1.4 后报过 NoSuchMethodException） */
+    @Test
+    public void selectSingleZonedColumn() {
+        Assert.assertEquals("SELECT t.`created_at` FROM `t_fork_event` t ORDER BY t.`created_at` ASC",
+            mysql.queryable(ForkEvent.class).orderBy(e -> e.createdAt().asc()).select(e -> e.createdAt()).toSQL());
+        Assert.assertEquals("SELECT t.`due_at` FROM `t_fork_event` t",
+            mysql.queryable(ForkEvent.class).select(e -> e.dueAt()).toSQL());
+        Assert.assertEquals("SELECT t.`seen_at` FROM `t_fork_event` t",
+            mysql.queryable(ForkEvent.class).select(e -> e.seenAt()).toSQL());
+    }
+
     /** flow 的 StatsQueries.nodes 原来要先 asLocalDateTime() 才能用 duration */
     @Test
     public void durationAggregateInGroupSelect() {
