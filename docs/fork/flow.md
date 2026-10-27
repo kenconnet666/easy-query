@@ -26,6 +26,8 @@ flow（C:\Users\lionheart\IdeaProjects\flow）是 fork 的第一个真实使用�
 
 ## 验收方式
 
-- flow 仓库本地分支 `eq-fork-acceptance`，只本地提交、不推送。
+- flow 仓库本地分支 `eq-fork-acceptance`，从最新的远程 main 切出，只本地提交、不推送。
+- **跟进 main**：flow 的 main 仍在别处持续开发。每做一个 flow 相关工作项之前、每个里程碑检查点，都 `git fetch` 后把 `origin/main` **merge** 进分支（不 rebase，免得要强推），再把新进来的代码也改成新写法；冲突以 main 的业务逻辑为准、只改写持久层写法。
+- 每处改动在代码里写中文注释说明用了 fork 的哪项能力、替代了什么旧写法，方便 review 与回退。
 - fork 在临时 worktree 里 `versions:set 3.3.1-ext-SNAPSHOT` 后 install；flow 分支把 `easy-query.version` 指过去。
 - 每项记录：改了哪些文件、净减多少行、flow 实库测试（MySQL 8.4 与 PolarDB 替身）是否全过。

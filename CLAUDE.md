@@ -42,6 +42,14 @@ wsl -d Debian -- bash -lc 'cd /mnt/c/Users/lionheart/IdeaProjects/easy-query && 
 ```
 
 ```powershell
-# JDK 8 构建（除 springboot4 starter）
-$env:JAVA_HOME='C:\soft\jdk1.8.0_181'; .\mvnw.cmd -B -T 4 '-Dgpg.skip=true' '-Dmaven.javadoc.skip=true' '-pl' '!sql-extension/sql-springboot4-starter' install
+# JDK 8 构建全部模块并跑 sql-fork-test（除 springboot4 starter；sql-test 不 install，所以 fork 测试要和它在同一个 reactor 里）
+$env:JAVA_HOME='C:\soft\jdk1.8.0_181'; .\mvnw.cmd -B -T 4 '-Dgpg.skip=true' '-Dmaven.javadoc.skip=true' '-Dmaven.source.skip=true' '-pl' '!sql-extension/sql-springboot4-starter' install
+# 只改了 fork 测试或单个模块时
+$env:JAVA_HOME='C:\soft\jdk1.8.0_181'; .\mvnw.cmd -B -T 4 '-Dgpg.skip=true' '-Dmaven.javadoc.skip=true' '-Dmaven.source.skip=true' -pl sql-fork-test -am test
+# 实库用例（infra/dev 已起）：再加 -Plive
+```
+
+```bash
+# 上游实库基线（MySQL、PG、Redis 已起；输出到 target/upstream-baseline）
+bash tools/upstream-baseline/run.sh
 ```

@@ -13,11 +13,11 @@ M0 → M1 → M2 → M3a（flow 用得上的 3.1–3.2）→ M5（T0–T2）→ 
 ## M0 地基
 
 - [x] 0.1 本地测试库 `infra/dev`：MySQL 8.4（3306/3316）、PG 17（54321）、HANA 2.00.088（39041），端口账号对齐上游 sql-test
-- [ ] 0.2 PolarDB 本地替身：`polardbx/polardbx-engine-2.0:80-8.0.18-*`（MySQL 8.0.18 内核，X-Cluster），profile `polardb`，端口 3318
-- [ ] 0.3 Maven wrapper（mvnw，3.9.x）
-- [ ] 0.4 新模块 `sql-fork-test`：标准 `src/test/java`、JUnit 4、测试源走 APT；默认只跑 SQL 文本断言，`-Plive` 连本地库
-- [ ] 0.5 CI `.github/workflows/ci.yml`：PR 与 push main 触发；JDK 8 构建（除 springboot4 starter）+ fork 测试；JDK 17 构建 springboot4 starter；不碰 release.yml、不推 tag
-- [ ] 0.6 上游测试基线：可重跑的脚本 + `docs/fork/baseline.md`（总数、通过、失败按原因分类）
+- [x] 0.2 PolarDB 兼容基线：官方 `mysql:8.0.18`（与生产报告的内核版本一致；PolarDB-X 引擎 2.0 的 "80-8.0.18" 镜像实际是 8.0.30，弃用），profile `polardb`，端口 3318；另加 Redis（上游 BaseTest 要）
+- [x] 0.3 Maven wrapper（mvnw，Maven 3.9.16）
+- [x] 0.4 新模块 `sql-fork-test`：标准 `src/test/java`、JUnit 4、测试源走 APT；默认只跑 SQL 文本断言，`-Plive` 连本地库
+- [~] 0.5 CI `.github/workflows/ci.yml`：PR 与 push main 触发；JDK 8 构建（除 springboot4 starter）+ fork 测试；JDK 17 构建 springboot4 starter；不碰 release.yml、不推 tag
+- [x] 0.6 上游测试基线：可重跑的脚本 + `docs/fork/baseline.md`（总数、通过、失败按原因分类）
 - [ ] 0.7 文档骨架（CLAUDE.md、ROADMAP、STATUS、BACKLOG、features/、decisions/），合并 M0
 
 ## M1 扩展点与小修（都能单独回馈上游）

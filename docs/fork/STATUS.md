@@ -4,18 +4,19 @@
 
 ## 当前
 
-- 分支 `chore/m0-foundation`：M0 进行中（0.1 已完成，规划文档已写）。
+- M0 收尾：PR `chore/m0-foundation` 等 CI。
 
 ## 最近完成
 
-- 本地测试库（MySQL 8.4、PG 17、HANA 2.00.088）在 WSL Docker 运行，IDEA 已建数据源；明文连接在 `.local/connections.md`。
-- JDK 8u181 下 26 个模块构建通过；`sql-springboot4-starter` 需要 JDK 17。
-- 样板验证：方言静态入口在 where / 链式 / 隐式子查询 / select / orderBy 都生效，错方言报错，不改 core。
+- json-wire 改为 Java 8（本地分支 `feat/java8`，已 install 到本机 `0.1.0-SNAPSHOT`；发布由用户手动做）。
+- 本地测试库：MySQL 8.4（3306/3316）、PG 17（54321）、Redis（55000）、HANA 2.00.088（39041，profile hana）、MySQL 8.0.18（3318，profile polardb）。
+- `sql-fork-test` 模块：fork 冒烟 + 上游不连库的 13 个类，JDK 8 下 202/202 通过。
+- 上游实库基线（docs/fork/baseline.md）：通过 2080、稳定非通过 57 条，均与 fork 无关。
+
+## 更正
+
+- 之前说的 PolarDB 替身 `polardbx-engine-2.0:80-8.0.18` 实际报告 MySQL 8.0.30，已弃用；改用官方 `mysql:8.0.18` 作为与生产内核一致的兼容基线。
 
 ## 待决（不阻塞，用户有空时看）
 
-- TS 版设计草案 `decisions/0002-ts-design.md` 待用户审阅；审阅前不开始 T1（T0 的类型样板可以先做）。
-
-## 已确认
-
-- 生产 PolarDB 版本串 `8.0.18-X-Cluster-1.0.4`，用户确认本地替身 `polardbx-engine-2.0:80-8.0.18` 可作基线（镜像已拉取）。
+- TS 版设计草案 `decisions/0002-ts-design.md` 待用户审阅；审阅前只做类型样板，不开始 T1。
