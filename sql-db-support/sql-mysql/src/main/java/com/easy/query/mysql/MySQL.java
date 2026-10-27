@@ -24,9 +24,9 @@ public final class MySQL {
     private MySQL() { }
 
     /** 把列当作 JSON 文档（JSON 类型或存 JSON 文字的列）。 */
-    public static MySQLJson json(PropTypeColumn<?> column) {
+    public static <T> MySQLJson<T> json(PropTypeColumn<T> column) {
         DialectExpressions.require(column, MySQLDialectMarker.class, "MySQL.json");
-        return new MySQLJson(column);
+        return new MySQLJson<>(column);
     }
 
     /** 全文检索：列要在同一张表上并有覆盖它们的 FULLTEXT 索引。 */

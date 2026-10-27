@@ -61,7 +61,7 @@ M3b：
 
 - [ ] 4.1 HANA：全文 `CONTAINS(…, FUZZY)` 与 `SCORE()`、层级 `HIERARCHY` 函数、表函数与计算视图传参（PLACEHOLDER）
 - [ ] 4.2 PG：jsonb 运算全集、数组、全文 tsvector/tsquery
-- [ ] 4.3 MySQL / PolarDB：JSON 全集（8.0.18 可用的）、全文检索；PolarDB 专属语法本地无法实测的进 BACKLOG
+- [x] 4.3 MySQL / PolarDB：JSON 条件（contains、overlaps、hasMember、containsPath）与修改（`edit` → JSON_SET / JSON_REMOVE / JSON_ARRAY_APPEND），全文 `MySQL.match`（M1）；8.0.18 实测。JSON_TABLE / JSON_SEARCH 与 PolarDB 专属语法进 BACKLOG
 
 ## M5 TS 版（本仓库 `ts/`，pnpm workspace；不追求与 Java 生成逐字相同的 SQL，只共享概念与命名）
 
