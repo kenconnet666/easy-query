@@ -6,7 +6,7 @@ import { SqlWriter, type Statement } from './dialect.ts'
 import { condNode, Expr, toNode, type Cond } from './expr.ts'
 import { REF, Scope, type Ref } from './ref.ts'
 import type { AnySchema, EntityKey } from './relations.ts'
-import type { Entity, Insert, ValueOf } from './schema.ts'
+import type { Entity, Insert, Row, ValueOf } from './schema.ts'
 import { refEntity } from './interceptor.ts'
 import { execute, query, type Context } from './session.ts'
 
@@ -191,6 +191,25 @@ export class Updatable<S extends AnySchema, K extends EntityKey<S>> extends Filt
 
   where(filter: (r: Ref<S, K>) => Cond): Updatable<S, K> {
     return new Updatable(this.ctx, this.key as K, { ...this.state, where: [...this.state.where, filter] }, this.values)
+  }
+
+  /**
+   * 按主键更新整行：set 除主键外的所有列（值为 undefined 的列跳过），where 主键相等。
+   * ```ts
+   * const user = await db.queryable(User).where(u => u.id.eq(1)).single()
+   * await db.update(User).entity({ ...user, name: 'b' }).execute()
+   * ```
+   */
+  entity(row: Row<EntityOf<S, K>>): Updatable<S, K> {
+    const entity = this.ctx.schema.entities[this.key]!
+    if (entity.primaryKey.length === 0) throw new Error(`update(..).entity(..) needs a primary key on ${entity.table}`)
+    const values = row as Record<string, unknown>
+    for (const key of entity.primaryKey) {
+      if (values[key] === undefined || values[key] === null) throw new Error(`update(..).entity(..) needs the primary key '${key}' of ${entity.table}`)
+    }
+    const set = Object.fromEntries(Object.keys(entity.columns).filter((p) => !entity.primaryKey.includes(p) && values[p] !== undefined).map((p) => [p, values[p]]))
+    const byKey = (r: any) => entity.primaryKey.map((k) => (r[k] as Expr<unknown>).eq(values[k] as never))
+    return new Updatable(this.ctx, this.key as K, { ...this.state, where: [...this.state.where, byKey] }, () => set)
   }
 
   all(): Updatable<S, K> {

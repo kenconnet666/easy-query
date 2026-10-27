@@ -125,7 +125,7 @@ await db.insert(User).values(rows).execute()                         // 批量�
 const n = await db.update(User).set(u => ({ name: 'b', age: u.age.plus(1) })).where(u => u.id.eq(id)).execute()
 await db.delete(User).where(u => u.id.eq(id)).execute()              // 无 where 的删除要显式 .all()
 await db.insert(User).values(row).onConflict(u => u.id).merge(u => [u.name]).execute()   // upsert；merge() 不传为全部非冲突列，.ignore() 为跳过
-// T3：按主键整行更新 db.update(User).entity(row)
+await db.update(User).entity({ ...user, name: 'b' }).execute()     // 按主键整行更新：set 除主键外的列，where 主键相等
 ```
 
 条件全被跳过（`id && u.id.eq(id)` 而 id 为空）也算没有条件，同样拒绝执行。更新与删除里不允许多对一导航（要 JOIN，各库写法不一），一对多的 `any()` 可以。
@@ -146,19 +146,21 @@ await db.transaction(async tx => {
 ## 6. 方言专属与原生 SQL
 
 ```ts
-import { mysql } from '@eqts/mysql'
-import { hana } from '@eqts/hana'
+import { MySQL } from '@eqts/mysql'
+import { Hana } from '@eqts/hana'
+import { Pg } from '@eqts/pg'
 
-db.queryable(User).where(u => mysql.jsonContains(u.attrs, ['vip'], '$.tags'))
-db.queryable(Doc).where(d => hana.contains(d.body, 'easy query', { fuzzy: 0.8 }))
-  .select(d => ({ id: d.id, score: hana.score() }))
+db.queryable(User).where(u => MySQL.json(u.attrs).contains('"vip"', '$.tags'))
+db.queryable(Doc).where(d => Hana.text(d.body).fuzzy('easy query', 0.8))
+  .select(d => ({ id: d.id, score: Hana.text(d.body).score() }))
+db.queryable(Post).where(p => Pg.fulltext(p.body).matches('easy -jdbc'))
 
 // 原生片段：标签模板，列与参数自动绑定，泛型给出结果类型
 db.queryable(User).where(u => sql<boolean>`${u.name} REGEXP ${pattern}`)
   .select(u => ({ len: sql<number>`JSON_LENGTH(${u.attrs})` }))
 ```
 
-方言入口与 Java 版同形：按列包装，用错方言在构造表达式时报错。用户自己写的方言函数用同一个 `defineFunction` 帮助函数，与内置无差别。
+方言入口与 Java 版同名同形（`MySQL.json / match`、`Pg.jsonb / array / fulltext`、`Hana.text`），按列包装。入口生成带方言前缀的函数节点（如 `mysql.json_contains`），只有对应方言的函数表认得：用错方言在 `toSQL` / 执行前渲染时报 "function 'mysql.json_contains' is not supported by the postgres dialect"（TS 构造表达式时还不知道方言，所以检查放在渲染）。用户自己的方言函数用同一个 `dialectFn(name, args, codec)`，再在自己的 Dialect 子类的 `functions()` 里登记写法，与内置无差别；一次性的片段用 `sql` 标签模板。
 
 ## 7. 包结构
 

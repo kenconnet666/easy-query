@@ -8,13 +8,22 @@
  * TIMESTAMP 列会按会话时区换算，建议连接池设 `timezone: 'Z'` 并让会话时区为 +00:00。
  */
 import type { Pool, PoolConnection, ResultSetHeader } from 'mysql2/promise'
-import { Dialect, type Adapter, type ConflictNode, type Driver, type ExecuteResult, type Session, type TransactionOptions } from '@eqts/core'
+import { Dialect, type Adapter, type ConflictNode, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type TransactionOptions } from '@eqts/core'
+import { mysqlFunctions } from './functions.ts'
+
+export { MySQL } from './functions.ts'
+export type { MatchMode } from './functions.ts'
 
 /** MySQL 要求 OFFSET 前必须有 LIMIT；没给 LIMIT 时用最大值 */
 const NO_LIMIT = '18446744073709551615'
 
 export class MySqlDialect extends Dialect {
   readonly name = 'mysql'
+
+  /** MySQL.json / MySQL.match 的函数（见 functions.ts） */
+  protected override functions(): Record<string, FunctionRenderer> {
+    return { ...super.functions(), ...mysqlFunctions }
+  }
 
   override quote(identifier: string): string {
     return '`' + identifier.replace(/`/g, '``') + '`'

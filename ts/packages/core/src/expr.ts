@@ -193,3 +193,16 @@ export function sql<T>(strings: TemplateStringsArray, ...args: unknown[]): Expr<
 /** 带解码的原生片段：`sql.typed(codecs.int)\`...\`` */
 sql.typed = <T>(codec: Codec<T>) => (strings: TemplateStringsArray, ...args: unknown[]): Expr<T> =>
   new Expr<T>({ k: 'raw', parts: [...strings], args: args.map((a) => toNode(a, undefined)) }, codec)
+
+/**
+ * 方言专属函数的节点：name 由方言的函数表认领（如 'mysql.json_contains'），别的方言渲染时报不支持。
+ * 参数里的表达式按列渲染，节点原样放入（如受信任的 lit），其余值作为绑定参数。
+ */
+export function dialectFn<T>(name: string, args: readonly unknown[], codec?: Codec<any>): Expr<T> {
+  const nodes = args.map((a): Node => (a instanceof Expr ? a.node : isNode(a) ? a : { k: 'param', value: a, codec: undefined }))
+  return new Expr<T>({ k: 'fn', name, args: nodes }, codec)
+}
+
+function isNode(value: unknown): value is Node {
+  return typeof value === 'object' && value !== null && 'k' in value && (value as { k: unknown }).k === 'lit'
+}
