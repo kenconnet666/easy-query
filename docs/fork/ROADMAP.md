@@ -16,15 +16,15 @@ M0 → M1 → M2 → M3a（flow 用得上的 3.1–3.2）→ M5（T0–T2）→ 
 - [x] 0.2 PolarDB 兼容基线：官方 `mysql:8.0.18`（与生产报告的内核版本一致；PolarDB-X 引擎 2.0 的 "80-8.0.18" 镜像实际是 8.0.30，弃用），profile `polardb`，端口 3318；另加 Redis（上游 BaseTest 要）
 - [x] 0.3 Maven wrapper（mvnw，Maven 3.9.16）
 - [x] 0.4 新模块 `sql-fork-test`：标准 `src/test/java`、JUnit 4、测试源走 APT；默认只跑 SQL 文本断言，`-Plive` 连本地库
-- [~] 0.5 CI `.github/workflows/ci.yml`：PR 与 push main 触发；JDK 8 构建（除 springboot4 starter）+ fork 测试；JDK 17 构建 springboot4 starter；不碰 release.yml、不推 tag
+- [x] 0.5 CI `.github/workflows/ci.yml`：PR 与 push main 触发；JDK 8 构建（除 springboot4 starter）+ fork 测试；JDK 17 构建 springboot4 starter；不碰 release.yml、不推 tag
 - [x] 0.6 上游测试基线：可重跑的脚本 + `docs/fork/baseline.md`（总数、通过、失败按原因分类）
-- [ ] 0.7 文档骨架（CLAUDE.md、ROADMAP、STATUS、BACKLOG、features/、decisions/），合并 M0
+- [x] 0.7 文档骨架（CLAUDE.md、ROADMAP、STATUS、BACKLOG、features/、decisions/），合并 M0
 
 ## M1 扩展点与小修（都能单独回馈上游）
 
-- [ ] 1.1 方言静态入口约定（decisions/0001）：入口类 `com.easy.query.<db>.<Db>`（如 `MySQL`、`PgSQL`、`Hana`）放在方言模块里，`sql-api-proxy` 以 provided 依赖引入；方言在自己的 `DatabaseConfiguration` 里注册能力标记，兼容库（PolarDB 用 MySQL 方言）共用；构造表达式时查标记，错方言明确报错。列参数一律用现成的 `PropTypeColumn.acceptAnyValue`
-- [ ] 1.2 首批专属函数（不与已有的 `asJSONObject()/asJSONArray()` 重叠）：MySQL `jsonContains`、`memberOf`、`jsonOverlaps`、全文 `match(...).against(...)`（全部 8.0.18 可用）；PG jsonb `@>`、`?`，数组 `&&`、`= ANY`
-- [ ] 1.3 文档 `features/custom-dialect-function.md`：用户写自己的方言函数，与内置同形
+- [x] 1.1 方言静态入口约定（decisions/0001）：入口类 `com.easy.query.<db>.<Db>`（如 `MySQL`、`PgSQL`、`Hana`）放在方言模块里，`sql-api-proxy` 以 provided 依赖引入；方言在自己的 `DatabaseConfiguration` 里注册能力标记，兼容库（PolarDB 用 MySQL 方言）共用；构造表达式时查标记，错方言明确报错。列参数一律用现成的 `PropTypeColumn.acceptAnyValue`
+- [x] 1.2 首批专属函数（不与已有的 `asJSONObject()/asJSONArray()` 重叠）：MySQL `jsonContains`、`memberOf`、`jsonOverlaps`、全文 `match(...).against(...)`（全部 8.0.18 可用）；PG jsonb `@>`、`<@`、键存在（数组运算挪到 M4.2：参数绑定数组要实测）
+- [x] 1.3 文档 `features/dialect-functions.md`（含自写扩展）：用户写自己的方言函数，与内置同形
 - [ ] 1.4 `Instant`/`OffsetDateTime`/`ZonedDateTime`：APT（ProxyGenerateProcessor）与 KSP 映射到日期时间列类型；默认 JdbcTypeHandler（语义在 decisions 里定）
 - [ ] 1.5 缺陷：窗口函数 `PARTITION BY x` 与 `ORDER BY` 之间缺空格（ColumnObjectFunctionAvailable.offset），不加引号的方言会出错
 - [ ] 1.6 代理 API 暴露已有的 `jsonArrayLength`
