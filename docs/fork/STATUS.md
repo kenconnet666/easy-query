@@ -4,11 +4,12 @@
 
 ## 当前
 
-- 下一步 M3b（3.3 JSON 转换器 + codec SPI 起），之后 M4，再回 TS 的 T3。
+- 下一步：M3b 收尾（合并上游 main、全量构建、跑上游基线），然后 M4（HANA 全文 / 层级、PG jsonb / 数组 / 全文、MySQL JSON / 全文），再回 TS 的 T3。
 - flow 验收分支 `eq-fork-acceptance`（本地，不推送）：每个工作项前 fetch 并 merge flow 的 origin/master。
 
 ## 最近完成
 
+- M3b 全部完成（PR #12–#18）：3.3 JsonValueConverter + JsonCodec、3.4 窗口 frame / 全局窗口 / ntile 等、3.5 rollup / cube / grouping、3.6 eqNullSafe / nullIf、3.7 dateTrunc、3.8 PgSQL.returning、3.9 forUpdateNoWait / forUpdateSkipLocked；每项在 MySQL 8.0.18、PG 17、HANA 实测（3.8 仅 PG）。
 - M5 T0–T2：TS 版（`ts/`：@eqts/core、@eqts/sqlite、@eqts/mysql），共用实库套件在 SQLite、MySQL 8.0.18、8.4 上通过；设计与实现差异见 `decisions/0002-ts-design.md` 末节。
 - flow M3a 验收：归档改用 TableNameMapping + InsertSelect，5 文件净减 42 行，flow-it 两库各 100 个用例通过（见 `flow.md` 验收记录）。
 - M3.1 TableNameMapping、M3.2 InsertSelect；M2 HANA 方言（查询、函数、MERGE upsert、生成键回填、DST 安全的 LocalDateTime）。
