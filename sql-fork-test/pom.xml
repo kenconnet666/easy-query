@@ -38,6 +38,20 @@
             <version>${project.version}</version>
             <scope>test</scope>
         </dependency>
+        <!-- fork 新增的方言：上游的 sql-test 不依赖它们 -->
+        <dependency>
+            <groupId>com.easy-query</groupId>
+            <artifactId>sql-hana</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- HANA 的 JDBC 驱动（只给 live 用例；版本与 easy_query_pro 实测过的一致，IDEA 自带的 2.17 会报 getSubject not supported） -->
+        <dependency>
+            <groupId>com.sap.cloud.db.jdbc</groupId>
+            <artifactId>ngdbc</artifactId>
+            <version>2.30.11</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

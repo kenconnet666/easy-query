@@ -32,10 +32,10 @@ M0 → M1 → M2 → M3a（flow 用得上的 3.1–3.2）→ M5（T0–T2）→ 
 
 ## M2 SAP HANA 方言（新模块 `sql-db-support/sql-hana`，以 sql-db2 为模板；实测知识来自 easy_query_pro/docs/hana-*.md，只取知识不取其补丁式架构，Java 17 语法降到 8）
 
-- [ ] 2.1 骨架：SQLKeyword（双引号、大写折叠）、`LIMIT/OFFSET`、`FROM DUMMY`、ExpressionFactory；springboot starter、solon 插件、README 接入
-- [ ] 2.2 SQLFunc：`||` 拼接、SUBSTRING/LOCATE（UTF-16 计数）、STRING_AGG、ADD_DAYS 等日期加减与格式 token 翻译、SELECT 里布尔值用 CASE、JSON_VALUE/JSON_QUERY、IFNULL
-- [ ] 2.3 写入：upsert 用 `MERGE INTO … USING (… FROM DUMMY)`；生成键用同连接 `SELECT CURRENT_IDENTITY_VALUE() FROM DUMMY`（表上有启用的 INSERT 触发器时拒绝回填）；批量走 JDBC batch；零列插入明确报错
-- [ ] 2.4 关联更新与删除：UPDATE 用按主键关联的 MERGE，DELETE 用 EXISTS
+- [x] 2.1 骨架：SQLKeyword（双引号、大写折叠）、`LIMIT/OFFSET`、`FROM DUMMY`、ExpressionFactory；springboot starter、solon 插件、README 接入
+- [x] 2.2 SQLFunc：`||` 拼接、SUBSTRING/LOCATE（UTF-16 计数）、STRING_AGG、ADD_DAYS 等日期加减与格式 token 翻译、SELECT 里布尔值用 CASE、JSON_VALUE/JSON_QUERY、IFNULL
+- [~] 2.3 写入：upsert（MERGE 已完成；生成键回填、批量待做） 用 `MERGE INTO … USING (… FROM DUMMY)`；生成键用同连接 `SELECT CURRENT_IDENTITY_VALUE() FROM DUMMY`（表上有启用的 INSERT 触发器时拒绝回填）；批量走 JDBC batch；零列插入明确报错
+- [x] 2.4 关联更新与删除：UPDATE 用按主键关联的 MERGE，DELETE 用 EXISTS
 - [ ] 2.5 类型：时间按 UTC Calendar 绑定与读取、LOB 用流 setter、DECIMAL 参数加 CAST 提示
 - [ ] 2.6 迁移：`CREATE COLUMN TABLE`、`ALTER TABLE t ALTER (…)`、注释、索引、反查 SYS 视图
 - [ ] 2.7 实库用例（`-Plive`，eq-dev-hana）+ `features/hana.md` 支持矩阵
