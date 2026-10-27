@@ -560,6 +560,15 @@ public class Expression {
     }
 
     /**
+     * fork：GROUPING(key)：配合 {@code rollup()} / {@code cube()}，该行里 key 被汇总掉（小计、总计行）时为 1，否则为 0
+     */
+    public NumberTypeExpression<Integer> grouping(PropTypeColumn<?> key) {
+        return new NumberTypeExpressionImpl<>(entitySQLContext, key.getTable(), null, f -> f.anySQLFunction("GROUPING({0})", c -> {
+            PropTypeColumn.columnFuncSelector(c, key);
+        }), Integer.class);
+    }
+
+    /**
      * fork：NTILE(buckets) OVER (…)，把有序的行分成 buckets 组，返回组号（1 起）
      */
     public OverBuilder<Long> ntileOver(int buckets) {

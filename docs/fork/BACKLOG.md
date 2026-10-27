@@ -15,3 +15,4 @@
 - [M3.3] PG json/jsonb 列写入字符串参数要 `stringtype=unspecified`；可评估让 PG 方言把 JsonValueConverter 的参数包成 PGobject / `?::jsonb`
 - [M3.7] dateTrunc 只实现了 PG、MySQL、HANA；SQL Server（DATETRUNC 2022+ / DATEADD+DATEDIFF）、Oracle（TRUNC(x, 'MM')）、H2 / DuckDB / Kingbase / GaussDB（DATE_TRUNC）待有人用时补
 - [M3.9] DB2 的 `SKIP LOCKED DATA` 未实测，现在明确报不支持；SQL Server 可用 `WITH (UPDLOCK, ROWLOCK, READPAST)` 表提示实现 skip locked
+- [M3.5] GROUPING SETS（任意指定的分组组合）：需要"键的集合的集合"这种 API，等有具体用例再设计；ROLLUP / CUBE 已覆盖常见的小计总计

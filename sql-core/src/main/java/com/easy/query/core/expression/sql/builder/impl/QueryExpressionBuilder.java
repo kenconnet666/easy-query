@@ -6,6 +6,7 @@ import com.easy.query.core.common.reverse.EmptyReverseEach;
 import com.easy.query.core.common.reverse.ReverseEach;
 import com.easy.query.core.context.QueryRuntimeContext;
 import com.easy.query.core.enums.EasyBehaviorEnum;
+import com.easy.query.core.enums.GroupingEnum;
 import com.easy.query.core.enums.MultiTableTypeEnum;
 import com.easy.query.core.enums.SubQueryModeEnum;
 import com.easy.query.core.exception.EasyQueryException;
@@ -15,6 +16,7 @@ import com.easy.query.core.expression.parser.core.available.TableAvailable;
 import com.easy.query.core.expression.predicate.SmartPredicateAnonymousExpressionBuilderProvider;
 import com.easy.query.core.expression.segment.SelectConstSegment;
 import com.easy.query.core.expression.segment.builder.GroupBySQLBuilderSegmentImpl;
+import com.easy.query.core.expression.segment.builder.GroupingSQLBuilderSegment;
 import com.easy.query.core.expression.segment.builder.OrderBySQLBuilderSegment;
 import com.easy.query.core.expression.segment.builder.OrderBySQLBuilderSegmentImpl;
 import com.easy.query.core.expression.segment.builder.ProjectSQLBuilderSegmentImpl;
@@ -55,6 +57,8 @@ public class QueryExpressionBuilder extends AbstractPredicateEntityExpressionBui
 
     protected PredicateSegment where;
     protected SQLBuilderSegment group;
+    /** fork：GROUP BY 的汇总方式，生成 SQL 表达式时才包到分组段上 */
+    protected GroupingEnum grouping = GroupingEnum.PLAIN;
     protected PredicateSegment having;
     protected OrderBySQLBuilderSegment order;
     protected long offset;
@@ -128,6 +132,27 @@ public class QueryExpressionBuilder extends AbstractPredicateEntityExpressionBui
     @Override
     public boolean hasHaving() {
         return EasySQLSegmentUtil.isNotEmpty(having);
+    }
+
+    @Override
+    public GroupingEnum getGrouping() {
+        return grouping;
+    }
+
+    @Override
+    public void setGrouping(GroupingEnum grouping) {
+        this.grouping = grouping == null ? GroupingEnum.PLAIN : grouping;
+    }
+
+    /** fork：ROLLUP / CUBE 时把分组键包进方言的写法；构建期的分组段保持原样，select 按键取列不受影响 */
+    private SQLBuilderSegment groupSegmentForSQL() {
+        SQLBuilderSegment group = getGroup().cloneSQLBuilder();
+        if (grouping == GroupingEnum.PLAIN || group.isEmpty()) {
+            return group;
+        }
+        GroupingSQLBuilderSegment wrapped = new GroupingSQLBuilderSegment(grouping, getRuntimeContext().fx());
+        group.copyTo(wrapped);
+        return wrapped;
     }
 
     @Override
@@ -261,7 +286,7 @@ public class QueryExpressionBuilder extends AbstractPredicateEntityExpressionBui
         if (where != null && where.isNotEmpty()) {
             easyQuerySQLExpression.setWhere(where);
         }
-        easyQuerySQLExpression.setGroup(getGroup().cloneSQLBuilder());
+        easyQuerySQLExpression.setGroup(groupSegmentForSQL());
         easyQuerySQLExpression.setHaving(getHaving().clonePredicateSegment());
         easyQuerySQLExpression.setOrder(getOrder().cloneSQLBuilder());
         easyQuerySQLExpression.setOffset(getOffset());
@@ -350,6 +375,7 @@ public class QueryExpressionBuilder extends AbstractPredicateEntityExpressionBui
         }
         if (hasGroup()) {
             getGroup().copyTo(queryExpressionBuilder.getGroup());
+            queryExpressionBuilder.setGrouping(grouping);
         }
         if (hasHaving()) {
             getHaving().copyTo(queryExpressionBuilder.getHaving());

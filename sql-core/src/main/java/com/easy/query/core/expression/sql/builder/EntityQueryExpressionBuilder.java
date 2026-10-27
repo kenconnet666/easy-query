@@ -1,6 +1,7 @@
 package com.easy.query.core.expression.sql.builder;
 
 import com.easy.query.core.expression.segment.builder.OrderBySQLBuilderSegment;
+import com.easy.query.core.enums.GroupingEnum;
 import com.easy.query.core.expression.segment.builder.SQLBuilderSegment;
 import com.easy.query.core.expression.segment.condition.PredicateSegment;
 import com.easy.query.core.expression.sql.expression.EntityQuerySQLExpression;
@@ -40,6 +41,15 @@ public interface EntityQueryExpressionBuilder extends EntityPredicateExpressionB
     boolean hasHaving();
 
     SQLBuilderSegment getGroup();
+
+    /** fork：GROUP BY 的汇总方式（ROLLUP / CUBE） */
+    default GroupingEnum getGrouping() {
+        return GroupingEnum.PLAIN;
+    }
+
+    default void setGrouping(GroupingEnum grouping) {
+        throw new UnsupportedOperationException(getClass().getSimpleName() + " does not support GROUP BY " + grouping);
+    }
 
     boolean isDistinct();
 

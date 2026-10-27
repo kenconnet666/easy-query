@@ -55,6 +55,7 @@ import com.easy.query.core.context.QueryRuntimeContext;
 import com.easy.query.core.enums.EasyBehaviorEnum;
 import com.easy.query.core.enums.ExecuteMethodEnum;
 import com.easy.query.core.enums.MultiTableTypeEnum;
+import com.easy.query.core.enums.GroupingEnum;
 import com.easy.query.core.enums.QueryLockEnum;
 import com.easy.query.core.enums.RelationTypeEnum;
 import com.easy.query.core.enums.SQLUnionEnum;
@@ -1867,6 +1868,26 @@ public abstract class AbstractClientQueryable<T1> implements ClientQueryable<T1>
     @Override
     public ClientQueryable<T1> forUpdateSkipLocked() {
         return lock(QueryLockEnum.FOR_UPDATE_SKIP_LOCKED);
+    }
+
+    @NotNull
+    @Override
+    public ClientQueryable<T1> rollup() {
+        return grouping(GroupingEnum.ROLLUP);
+    }
+
+    @NotNull
+    @Override
+    public ClientQueryable<T1> cube() {
+        return grouping(GroupingEnum.CUBE);
+    }
+
+    private ClientQueryable<T1> grouping(GroupingEnum grouping) {
+        if (EasySQLSegmentUtil.isEmpty(entityQueryExpressionBuilder.getGroup())) {
+            throw new IllegalStateException(grouping.name().toLowerCase() + "() needs groupBy(...) first on query [" + EasyClassUtil.getSimpleName(queryClass()) + "]");
+        }
+        entityQueryExpressionBuilder.setGrouping(grouping);
+        return this;
     }
 
     /** fork：三种 FOR UPDATE 共用的检查（事务内、单表、只设置一次） */

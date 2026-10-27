@@ -146,6 +146,22 @@ public interface ClientQueryable<T1> extends Query<T1>,
     /**
      * fork：与 {@link #forUpdate()} 相同，但拿不到锁时立即报错而不是等待（{@code FOR UPDATE NOWAIT}）
      */
+    /**
+     * fork：GROUP BY ROLLUP(…)：在 groupBy 的键上逐级小计并带总计（MySQL 为 WITH ROLLUP）；要在 groupBy 之后调用
+     */
+    @NotNull
+    default ClientQueryable<T1> rollup() {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * fork：GROUP BY CUBE(…)：对 groupBy 的键的所有组合小计（MySQL 不支持）；要在 groupBy 之后调用
+     */
+    @NotNull
+    default ClientQueryable<T1> cube() {
+        throw new UnsupportedOperationException();
+    }
+
     @NotNull
     default ClientQueryable<T1> forUpdateNoWait() {
         throw new UnsupportedOperationException();

@@ -137,6 +137,18 @@ public interface EntityQueryable<T1Proxy extends ProxyEntity<T1Proxy, T1>, T1> e
         throw new UnsupportedOperationException();
     }
 
+    /** fork：GROUP BY ROLLUP(…) 逐级小计 + 总计（MySQL 为 WITH ROLLUP），在 groupBy 之后调用；用 {@code expression().grouping(key)} 区分小计行 */
+    @NotNull
+    default EntityQueryable<T1Proxy, T1> rollup() {
+        throw new UnsupportedOperationException();
+    }
+
+    /** fork：GROUP BY CUBE(…) 所有组合小计（MySQL 不支持），在 groupBy 之后调用 */
+    @NotNull
+    default EntityQueryable<T1Proxy, T1> cube() {
+        throw new UnsupportedOperationException();
+    }
+
     /** fork：FOR UPDATE NOWAIT，拿不到锁立即报错 */
     @NotNull
     default EntityQueryable<T1Proxy, T1> forUpdateNoWait() {
