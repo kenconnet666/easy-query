@@ -95,6 +95,10 @@ public class ProxyGenerateProcessor extends AbstractProcessor {
         TYPE_COLUMN_MAPPING.put("java.time.LocalDate", new PropertyColumn("SQLLocalDateTypeColumn", "java.time.LocalDate"));
         TYPE_COLUMN_MAPPING.put("java.time.LocalDateTime", new PropertyColumn("SQLLocalDateTimeTypeColumn", "java.time.LocalDateTime"));
         TYPE_COLUMN_MAPPING.put("java.time.LocalTime", new PropertyColumn("SQLLocalTimeTypeColumn", "java.time.LocalTime"));
+        // fork：带时区的时刻类型
+        TYPE_COLUMN_MAPPING.put("java.time.Instant", new PropertyColumn("SQLInstantTypeColumn", "java.time.Instant"));
+        TYPE_COLUMN_MAPPING.put("java.time.OffsetDateTime", new PropertyColumn("SQLOffsetDateTimeTypeColumn", "java.time.OffsetDateTime"));
+        TYPE_COLUMN_MAPPING.put("java.time.ZonedDateTime", new PropertyColumn("SQLZonedDateTimeTypeColumn", "java.time.ZonedDateTime"));
     }
 
     private static final String FIELD_DOC_COMMENT_TEMPLATE = "\n" +

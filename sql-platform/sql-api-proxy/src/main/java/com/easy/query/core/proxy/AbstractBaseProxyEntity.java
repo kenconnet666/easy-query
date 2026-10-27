@@ -30,6 +30,9 @@ import com.easy.query.core.proxy.columns.types.SQLDoubleTypeColumn;
 import com.easy.query.core.proxy.columns.types.SQLFloatTypeColumn;
 import com.easy.query.core.proxy.columns.types.SQLIntegerTypeColumn;
 import com.easy.query.core.proxy.columns.types.SQLLocalDateTimeTypeColumn;
+import com.easy.query.core.proxy.columns.types.SQLInstantTypeColumn;
+import com.easy.query.core.proxy.columns.types.SQLOffsetDateTimeTypeColumn;
+import com.easy.query.core.proxy.columns.types.SQLZonedDateTimeTypeColumn;
 import com.easy.query.core.proxy.columns.types.SQLLocalDateTypeColumn;
 import com.easy.query.core.proxy.columns.types.SQLLocalTimeTypeColumn;
 import com.easy.query.core.proxy.columns.types.SQLLongTypeColumn;
@@ -48,6 +51,9 @@ import com.easy.query.core.proxy.columns.types.impl.SQLDoubleTypeColumnImpl;
 import com.easy.query.core.proxy.columns.types.impl.SQLFloatTypeColumnImpl;
 import com.easy.query.core.proxy.columns.types.impl.SQLIntegerTypeColumnImpl;
 import com.easy.query.core.proxy.columns.types.impl.SQLLocalDateTimeTypeColumnImpl;
+import com.easy.query.core.proxy.columns.types.impl.SQLInstantTypeColumnImpl;
+import com.easy.query.core.proxy.columns.types.impl.SQLOffsetDateTimeTypeColumnImpl;
+import com.easy.query.core.proxy.columns.types.impl.SQLZonedDateTimeTypeColumnImpl;
 import com.easy.query.core.proxy.columns.types.impl.SQLLocalDateTypeColumnImpl;
 import com.easy.query.core.proxy.columns.types.impl.SQLLocalTimeTypeColumnImpl;
 import com.easy.query.core.proxy.columns.types.impl.SQLLongTypeColumnImpl;
@@ -201,6 +207,30 @@ public abstract class AbstractBaseProxyEntity<TProxy extends ProxyEntity<TProxy,
 
     protected SQLLocalDateTimeTypeColumn<TProxy> getLocalDateTimeTypeColumn(String property) {
         SQLLocalDateTimeTypeColumn<TProxy> column = new SQLLocalDateTimeTypeColumnImpl<>(entitySQLContext, table, property);
+        column._setProxy(castChain());
+        column.setNavValue(getFullNavValue(property));
+        return column;
+    }
+
+    /** fork：Instant 属性带日期时间函数（APT/KSP 生成的代理调用它） */
+    protected SQLInstantTypeColumn<TProxy> getInstantTypeColumn(String property) {
+        SQLInstantTypeColumn<TProxy> column = new SQLInstantTypeColumnImpl<>(entitySQLContext, table, property);
+        column._setProxy(castChain());
+        column.setNavValue(getFullNavValue(property));
+        return column;
+    }
+
+    /** fork：OffsetDateTime 属性带日期时间函数 */
+    protected SQLOffsetDateTimeTypeColumn<TProxy> getOffsetDateTimeTypeColumn(String property) {
+        SQLOffsetDateTimeTypeColumn<TProxy> column = new SQLOffsetDateTimeTypeColumnImpl<>(entitySQLContext, table, property);
+        column._setProxy(castChain());
+        column.setNavValue(getFullNavValue(property));
+        return column;
+    }
+
+    /** fork：ZonedDateTime 属性带日期时间函数 */
+    protected SQLZonedDateTimeTypeColumn<TProxy> getZonedDateTimeTypeColumn(String property) {
+        SQLZonedDateTimeTypeColumn<TProxy> column = new SQLZonedDateTimeTypeColumnImpl<>(entitySQLContext, table, property);
         column._setProxy(castChain());
         column.setNavValue(getFullNavValue(property));
         return column;

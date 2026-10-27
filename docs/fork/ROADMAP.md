@@ -25,7 +25,7 @@ M0 → M1 → M2 → M3a（flow 用得上的 3.1–3.2）→ M5（T0–T2）→ 
 - [x] 1.1 方言静态入口约定（decisions/0001）：入口类 `com.easy.query.<db>.<Db>`（如 `MySQL`、`PgSQL`、`Hana`）放在方言模块里，`sql-api-proxy` 以 provided 依赖引入；方言在自己的 `DatabaseConfiguration` 里注册能力标记，兼容库（PolarDB 用 MySQL 方言）共用；构造表达式时查标记，错方言明确报错。列参数一律用现成的 `PropTypeColumn.acceptAnyValue`
 - [x] 1.2 首批专属函数（不与已有的 `asJSONObject()/asJSONArray()` 重叠）：MySQL `jsonContains`、`memberOf`、`jsonOverlaps`、全文 `match(...).against(...)`（全部 8.0.18 可用）；PG jsonb `@>`、`<@`、键存在（数组运算挪到 M4.2：参数绑定数组要实测）
 - [x] 1.3 文档 `features/dialect-functions.md`（含自写扩展）：用户写自己的方言函数，与内置同形
-- [ ] 1.4 `Instant`/`OffsetDateTime`/`ZonedDateTime`：APT（ProxyGenerateProcessor）与 KSP 映射到日期时间列类型；默认 JdbcTypeHandler（语义在 decisions 里定）
+- [x] 1.4 `Instant`/`OffsetDateTime`/`ZonedDateTime`：APT（ProxyGenerateProcessor）与 KSP 映射到日期时间列类型；默认 JdbcTypeHandler 不变（不改现有用户的读写行为；要 UTC 语义的自己注册，如 flow 的 InstantUtcHandler）
 - [ ] 1.5 缺陷：窗口函数 `PARTITION BY x` 与 `ORDER BY` 之间缺空格（ColumnObjectFunctionAvailable.offset），不加引号的方言会出错
 - [ ] 1.6 代理 API 暴露已有的 `jsonArrayLength`
 - [ ] 1.7 MySQL 8.0.18 兼容审计：MySQL 方言的 SQL 文本用例与 fork 实库用例在 PolarDB 替身上跑一遍，列出依赖 8.0.19+ 的写法并修正或标注
