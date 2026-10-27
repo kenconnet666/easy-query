@@ -7,9 +7,11 @@ import com.easy.query.core.func.SQLFunction;
 import com.easy.query.core.func.column.ColumnFuncSelector;
 import com.easy.query.core.proxy.PropTypeColumn;
 import com.easy.query.core.proxy.core.EntitySQLContext;
+import com.easy.query.core.proxy.extension.functions.type.AnyTypeExpression;
 import com.easy.query.core.proxy.extension.functions.type.BooleanTypeExpression;
 import com.easy.query.core.proxy.extension.functions.type.NumberTypeExpression;
 import com.easy.query.core.proxy.extension.functions.type.StringTypeExpression;
+import com.easy.query.core.proxy.extension.functions.type.impl.AnyTypeExpressionImpl;
 import com.easy.query.core.proxy.extension.functions.type.impl.BooleanTypeExpressionImpl;
 import com.easy.query.core.proxy.extension.functions.type.impl.NumberTypeExpressionImpl;
 import com.easy.query.core.proxy.extension.functions.type.impl.StringTypeExpressionImpl;
@@ -65,6 +67,13 @@ public final class DialectExpressions {
     /** 结果是布尔值的表达式（select 里取值，或接着 {@code .eq(true)} 之类比较）。 */
     public static BooleanTypeExpression<Boolean> bool(PropTypeColumn<?> anchor, String template, Object... args) {
         return new BooleanTypeExpressionImpl<>(context(anchor), table(anchor), null, function(template, args), Boolean.class);
+    }
+
+    /**
+     * 结果与 anchor 同类型的表达式，例如改写后的 JSON 列：可以直接 {@code u.attrs().set(..)} 写回这一列，类型化的 JSON 属性也适用。
+     */
+    public static <T> AnyTypeExpression<T> sameType(PropTypeColumn<T> anchor, String template, Object... args) {
+        return new AnyTypeExpressionImpl<>(context(anchor), table(anchor), null, function(template, args), anchor.getPropertyType());
     }
 
     /** 结果是文字的表达式，可以继续链式调用字符串函数与比较。 */

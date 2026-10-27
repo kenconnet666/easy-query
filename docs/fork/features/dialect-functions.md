@@ -23,6 +23,8 @@ List<User> vip = easyEntityQuery.queryable(User.class)
 | `MySQL.json(col)` | `contains(candidate[, path])` | `JSON_CONTAINS(col, ?[, ?])` | candidate 是 JSON 文字，如 `"\"vip\""` |
 | | `overlaps(document)` | `JSON_OVERLAPS(col, ?)` | MySQL 8.0.17+ |
 | | `hasMember(value[, path])` | `? MEMBER OF(col)` / `? MEMBER OF(JSON_EXTRACT(col, ?))` | MySQL 8.0.17+ |
+| | `containsPath(paths...)` / `containsAllPaths(paths...)` | `JSON_CONTAINS_PATH(col, 'one' / 'all', ?, …)` | 有某个键 / 所有键 |
+| | `edit(e -> e.set(path, v).setJson(path, json).arrayAppend(path, v).remove(paths...))` | `JSON_REMOVE(JSON_ARRAY_APPEND(JSON_SET(col, …), …), …)` | 按调用顺序套在列外；结果与列同类型，update 里 `u.attrs().set(MySQL.json(u.attrs()).edit(..))` 写回。布尔、对象、数组用 `setJson`（JDBC 把布尔传成 1 / 0） |
 | `MySQL.match(cols...)` | `against(words[, mode])` | `MATCH(cols) AGAINST(? IN NATURAL LANGUAGE MODE)` | mode：`NATURAL_LANGUAGE`、`BOOLEAN`、`QUERY_EXPANSION`；要有 FULLTEXT 索引 |
 | | `score(words[, mode])` | 同上，作为值 | select、orderBy 用 |
 | `PgSQL.jsonb(col)` | `contains(document)` / `containedBy(document)` | `col::jsonb @> ?::jsonb` / `<@` | |
