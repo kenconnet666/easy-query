@@ -52,7 +52,7 @@ M3b：
 - [x] 3.5 `rollup()` / `cube()` 与 `grouping()`（[features/grouping.md](features/grouping.md)）：MySQL 为 WITH ROLLUP（无 CUBE）；PG、HANA、MySQL 8.0.18 实测。GROUPING SETS 进 BACKLOG
 - [x] 3.6 NULLIF；null-safe 等值 `eqNullSafe`（[features/null-safe.md](features/null-safe.md)）：MySQL `<=>`、PG `IS NOT DISTINCT FROM`，其他方言用等价的 OR 写法
 - [x] 3.7 日期截断 `dateTrunc`（[features/date-trunc.md](features/date-trunc.md)）：年/季/月/周/日/时/分/秒；PG、MySQL、HANA 实测，其它方言明确报不支持
-- [ ] 3.8 RETURNING（PG 等支持的方言；MySQL/HANA 明确报错）
+- [x] 3.8 `PgSQL.returning(updatable | deletable)`（[features/returning.md](features/returning.md)）：UPDATE / DELETE … RETURNING *，非 PG 方言构造时报错；PG 17 实测
 - [x] 3.9 `forUpdateNoWait()` / `forUpdateSkipLocked()`（[features/lock-wait.md](features/lock-wait.md)）：MySQL 8.0.18、PG、HANA（IGNORE LOCKED）实测
 
 不做（已有）：QUALIFY（嵌套 queryable + `Select.PART` 已能表达）、聚合 `filter`、lag/lead/first/last/nth、union/unionAll、onConflictThen、JSON 取值。

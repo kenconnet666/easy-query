@@ -44,7 +44,11 @@ public final class DialectExpressions {
      * @param function 报错时显示的函数名，如 {@code "MySQL.json"}
      */
     public static void require(PropTypeColumn<?> anchor, Class<?> marker, String function) {
-        QueryRuntimeContext runtime = anchor.getEntitySQLContext().getRuntimeContext();
+        require(anchor.getEntitySQLContext().getRuntimeContext(), marker, function);
+    }
+
+    /** 同上，用于不经过列的方言能力（如 {@code PgSQL.returning(deletable)}） */
+    public static void require(QueryRuntimeContext runtime, Class<?> marker, String function) {
         try {
             runtime.getService(marker);
         } catch (IllegalArgumentException notRegistered) {
