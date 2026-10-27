@@ -1,5 +1,6 @@
 package com.easy.query.core.proxy.extension.functions.type;
 
+import com.easy.query.core.func.def.WindowFrame;
 import com.easy.query.core.proxy.PropTypeColumn;
 
 /**
@@ -45,4 +46,23 @@ public interface PartitionByTypeExpression<T> extends AnyTypeExpression<T> {
      * @param <TProperty>
      */
     <TProperty> PartitionByTypeExpression<T> orderByDescending(boolean condition, PropTypeColumn<TProperty> propTypeColumn);
+
+    /**
+     * fork：ROWS BETWEEN start AND end，按物理行数取窗口，例如累计和 {@code rows(Bound.unboundedPreceding(), Bound.currentRow())}
+     */
+    default PartitionByTypeExpression<T> rows(WindowFrame.Bound start, WindowFrame.Bound end) {
+        return frame(WindowFrame.rows(start, end));
+    }
+
+    /**
+     * fork：RANGE BETWEEN start AND end，按 ORDER BY 的值取窗口（值相同的行同进同出）
+     */
+    default PartitionByTypeExpression<T> range(WindowFrame.Bound start, WindowFrame.Bound end) {
+        return frame(WindowFrame.range(start, end));
+    }
+
+    /**
+     * fork：设置 frame 子句；frame 要放在 orderBy 之后（SQL 里 frame 跟在 ORDER BY 后面）
+     */
+    PartitionByTypeExpression<T> frame(WindowFrame frame);
 }

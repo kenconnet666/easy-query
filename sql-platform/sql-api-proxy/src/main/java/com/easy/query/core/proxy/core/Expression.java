@@ -11,6 +11,7 @@ import com.easy.query.api.proxy.extension.partition.CountOverBuilder;
 import com.easy.query.api.proxy.extension.partition.DenseRankOverBuilder;
 import com.easy.query.api.proxy.extension.partition.MaxOverBuilder;
 import com.easy.query.api.proxy.extension.partition.MinOverBuilder;
+import com.easy.query.api.proxy.extension.partition.OverBuilder;
 import com.easy.query.api.proxy.extension.partition.RankOverBuilder;
 import com.easy.query.api.proxy.extension.partition.RowNumberOverBuilder;
 import com.easy.query.api.proxy.extension.partition.SumOverBuilder;
@@ -556,6 +557,27 @@ public class Expression {
 
     public <TProperty> MinOverBuilder<TProperty> minOver(PropTypeColumn<TProperty> countColumn) {
         return new MinOverBuilder<>(countColumn, entitySQLContext);
+    }
+
+    /**
+     * fork：NTILE(buckets) OVER (…)，把有序的行分成 buckets 组，返回组号（1 起）
+     */
+    public OverBuilder<Long> ntileOver(int buckets) {
+        return new OverBuilder<>(entitySQLContext, null, (f, columns) -> f.ntileOver(buckets, columns), Long.class);
+    }
+
+    /**
+     * fork：PERCENT_RANK() OVER (…)，(rank - 1) / (分区行数 - 1)，0 到 1
+     */
+    public OverBuilder<BigDecimal> percentRankOver() {
+        return new OverBuilder<>(entitySQLContext, null, SQLFunc::percentRankOver, BigDecimal.class);
+    }
+
+    /**
+     * fork：CUME_DIST() OVER (…)，小于等于当前行的行数占分区的比例，(0, 1]
+     */
+    public OverBuilder<BigDecimal> cumeDistOver() {
+        return new OverBuilder<>(entitySQLContext, null, SQLFunc::cumeDistOver, BigDecimal.class);
     }
 
     public <TProxy extends ProxyEntity<TProxy, T>, T extends ProxyEntityAvailable<T, TProxy>> EntityQueryable<TProxy, T> subQueryable(Class<T> entityClass) {

@@ -19,4 +19,11 @@ public interface SQLPartitionByFunc {
     PartitionBySQLFunction avgOver(SQLActionExpression1<ColumnFuncSelector> sqlExpression);
     PartitionBySQLFunction maxOver(SQLActionExpression1<ColumnFuncSelector> sqlExpression);
     PartitionBySQLFunction minOver(SQLActionExpression1<ColumnFuncSelector> sqlExpression);
+
+    /** fork：NTILE(buckets)，buckets 必须为正整数（写进 SQL） */
+    PartitionBySQLFunction ntileOver(int buckets, SQLActionExpression1<ColumnFuncSelector> sqlExpression);
+    /** fork：PERCENT_RANK() */
+    PartitionBySQLFunction percentRankOver(SQLActionExpression1<ColumnFuncSelector> sqlExpression);
+    /** fork：CUME_DIST() */
+    PartitionBySQLFunction cumeDistOver(SQLActionExpression1<ColumnFuncSelector> sqlExpression);
 }

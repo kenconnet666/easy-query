@@ -4,6 +4,7 @@ import com.easy.query.core.expression.parser.core.available.TableAvailable;
 import com.easy.query.core.func.SQLFunc;
 import com.easy.query.core.func.SQLFunction;
 import com.easy.query.core.func.def.PartitionBySQLFunction;
+import com.easy.query.core.func.def.WindowFrame;
 import com.easy.query.core.proxy.PropTypeColumn;
 import com.easy.query.core.proxy.core.EntitySQLContext;
 import com.easy.query.core.proxy.extension.functions.type.PartitionByTypeExpression;
@@ -47,6 +48,11 @@ public class PartitionByTypeExpressionImpl<TProperty> extends AnyTypeExpressionI
             },propType);
         }
         return this;
+    }
+
+    @Override
+    public PartitionByTypeExpression<TProperty> frame(WindowFrame frame) {
+        return new PartitionByTypeExpressionImpl<>(entitySQLContext, table, property, f -> func.apply(f).frame(frame), propType);
     }
 
     @Override

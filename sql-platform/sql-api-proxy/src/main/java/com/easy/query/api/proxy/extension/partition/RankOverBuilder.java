@@ -1,34 +1,13 @@
 package com.easy.query.api.proxy.extension.partition;
 
-import com.easy.query.core.exception.EasyQueryInvalidOperationException;
-import com.easy.query.core.proxy.PropTypeColumn;
+import com.easy.query.core.func.SQLFunc;
 import com.easy.query.core.proxy.core.EntitySQLContext;
-import com.easy.query.core.proxy.extension.functions.type.PartitionByTypeExpression;
-import com.easy.query.core.proxy.extension.functions.type.impl.PartitionByTypeExpressionImpl;
-import com.easy.query.core.util.EasyArrayUtil;
 
 /**
- * create time 2024/8/4 14:35
- *
- * @author xuejiaming
+ * RANK() OVER (…)；fork：实现收进 {@link OverBuilder}，可用 over() 开全局窗口
  */
-public class RankOverBuilder {
-    private final EntitySQLContext entitySQLContext;
-
+public class RankOverBuilder extends OverBuilder<Long> {
     public RankOverBuilder(EntitySQLContext entitySQLContext) {
-        this.entitySQLContext = entitySQLContext;
-    }
-
-    public PartitionByTypeExpression<Long> partitionBy(PropTypeColumn<?>... columns){
-        if(EasyArrayUtil.isEmpty(columns)){
-            throw new EasyQueryInvalidOperationException("rank over partition by empty");
-        }
-        return new PartitionByTypeExpressionImpl<>(entitySQLContext, columns[0].getTable(), null, f->{
-            return f.rankNumberOver(x->{
-                for (PropTypeColumn<?> column : columns) {
-                    PropTypeColumn.columnFuncSelector(x,column);
-                }
-            });
-        } , Long.class);
+        super(entitySQLContext, null, SQLFunc::rankNumberOver, Long.class);
     }
 }
