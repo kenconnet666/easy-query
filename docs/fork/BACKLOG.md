@@ -11,3 +11,5 @@
 - [M2] HANA JSON 数组长度：没有内置函数，easy_query_pro 的做法是部署一个 SQLScript 函数
 - [M2] 核心的 LocalDateTimeTypeHandler 经 Timestamp.valueOf 按 JVM 时区换算：JVM 时区有夏令时时，跳过那一小时里的时刻会被挪动（所有方言都受影响，HANA 已改用 UTC 日历）；可做成回馈上游的修复
 - [M2] HANA 迁移 DDL（2.6）挪到 M3a 之后：flow 用 Flyway 脚本，ERP 是库优先，目前没人等它
+- [M3.3] Spring Boot 4 的 Jackson 3（`tools.jackson.databind`）自动适配 JsonCodec：现在只认 Jackson 2，只有 Jackson 3 时用户要自己提供 JsonCodec bean
+- [M3.3] PG json/jsonb 列写入字符串参数要 `stringtype=unspecified`；可评估让 PG 方言把 JsonValueConverter 的参数包成 PGobject / `?::jsonb`
