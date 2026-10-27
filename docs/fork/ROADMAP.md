@@ -26,9 +26,9 @@ M0 → M1 → M2 → M3a（flow 用得上的 3.1–3.2）→ M5（T0–T2）→ 
 - [x] 1.2 首批专属函数（不与已有的 `asJSONObject()/asJSONArray()` 重叠）：MySQL `jsonContains`、`memberOf`、`jsonOverlaps`、全文 `match(...).against(...)`（全部 8.0.18 可用）；PG jsonb `@>`、`<@`、键存在（数组运算挪到 M4.2：参数绑定数组要实测）
 - [x] 1.3 文档 `features/dialect-functions.md`（含自写扩展）：用户写自己的方言函数，与内置同形
 - [x] 1.4 `Instant`/`OffsetDateTime`/`ZonedDateTime`：APT（ProxyGenerateProcessor）与 KSP 映射到日期时间列类型；默认 JdbcTypeHandler 不变（不改现有用户的读写行为；要 UTC 语义的自己注册，如 flow 的 InstantUtcHandler）
-- [ ] 1.5 缺陷：窗口函数 `PARTITION BY x` 与 `ORDER BY` 之间缺空格（ColumnObjectFunctionAvailable.offset），不加引号的方言会出错
-- [ ] 1.6 代理 API 暴露已有的 `jsonArrayLength`
-- [ ] 1.7 MySQL 8.0.18 兼容审计：MySQL 方言的 SQL 文本用例与 fork 实库用例在 PolarDB 替身上跑一遍，列出依赖 8.0.19+ 的写法并修正或标注
+- [x] 1.5 缺陷：窗口函数 `PARTITION BY x` 与 `ORDER BY` 之间缺空格（ColumnObjectFunctionAvailable.offset），不加引号的方言会出错
+- [x] 1.6 代理 API 暴露已有的 `jsonArrayLength`（`asJSONArray().size()`：length 在文字列上已是文字长度，用 size 避免歧义）
+- [x] 1.7 MySQL 8.0.18 兼容审计（features/mysql-8018.md）：MySQL 方言的 SQL 文本用例与 fork 实库用例在 PolarDB 替身上跑一遍，列出依赖 8.0.19+ 的写法并修正或标注
 
 ## M2 SAP HANA 方言（新模块 `sql-db-support/sql-hana`，以 sql-db2 为模板；实测知识来自 easy_query_pro/docs/hana-*.md，只取知识不取其补丁式架构，Java 17 语法降到 8）
 
