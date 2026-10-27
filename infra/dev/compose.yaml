@@ -1,0 +1,144 @@
+# 本地开发与实库测试用的数据库，运行在 WSL Debian 的 Docker 里。
+# 端口和账号与上游 sql-test 中写死的连接一致（MySQL 3306/3316 root/root、PG 54321 postgres/postgres），
+# 这样上游的实库测试不改代码就能跑。HANA 体积大、启动慢，放在 hana profile 里按需启动。
+#
+# 用法：在仓库根目录执行（Windows 下前面加 `wsl -d Debian --`）
+#   bash infra/dev/db.sh up -d                 # MySQL + PG
+#   bash infra/dev/db.sh --profile hana up -d  # 再加 HANA，首次约 4 分钟
+#   bash infra/dev/db.sh ps
+# 密码与连接串在 .local/（已 gitignore），首次由 db.sh 生成。
+name: easy-query-dev
+
+services:
+  mysql:
+    image: mysql:8.4.11@sha256:1f8411cc085d2f2f92060fca926746cbf97f87b76c3008e9741ad62e604c4ffa
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      MYSQL_ROOT_PASSWORD: ${EQ_MYSQL_ROOT_PASSWORD:?run infra/dev/db.sh to create .local/db.env}
+      TZ: Asia/Shanghai
+    # 上游测试连接串不带 allowPublicKeyRetrieval 且 useSSL=false，只能用 mysql_native_password
+    command:
+      - --mysql-native-password=ON
+      - --authentication-policy=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --lower-case-table-names=1
+      - --max-connections=200
+    ports:
+      - "3306:3306"
+      - "3316:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: [CMD-SHELL, 'MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql --protocol=TCP -h 127.0.0.1 -u root -e "SELECT 1" >/dev/null']
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 20s
+
+  postgres:
+    image: postgres:17.11-bookworm@sha256:66aafa11cf15800a3c94763f7e11d1e7b2e37e5e84bc4ce027cb6e1e4bfaf4df
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${EQ_PG_PASSWORD:?run infra/dev/db.sh to create .local/db.env}
+      POSTGRES_DB: easy-query-test
+      TZ: Asia/Shanghai
+    command: [postgres, -c, max_connections=200]
+    ports:
+      - "54321:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD, pg_isready, -h, 127.0.0.1, -U, postgres]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # 上游 sql-test 的 BaseTest 在静态初始化里连 127.0.0.1:55000（密码 redispw）并清缓存键；没有它，继承 BaseTest 的类全部初始化失败
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    mem_limit: 256m
+    command: [redis-server, --requirepass, redispw, --save, "", --appendonly, "no"]
+    ports:
+      - "55000:6379"
+    healthcheck:
+      test: [CMD, redis-cli, -a, redispw, ping]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # 生产 PolarDB MySQL 版报告的内核是 8.0.18（8.0.18-X-Cluster-1.0.4），语法与函数是否可用按内核版本走，
+  # 所以用官方 mysql:8.0.18 当兼容基线：MySQL 方言与 flow 在这里验证不用到 8.0.19+ 的写法。
+  # （开源 PolarDB-X 引擎 2.0 的 "80-8.0.18" 镜像实际报告 8.0.30，不能当基线。）
+  polardb:
+    profiles: [polardb]
+    image: mysql:8.0.18@sha256:e1b0fd480a11e5c37425a2591b6fbd32af886bfc6d6f404bd362be5e50a2e632
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      MYSQL_ROOT_PASSWORD: ${EQ_POLARDB_PASSWORD:?run infra/dev/db.sh to create .local/db.env}
+      MYSQL_DATABASE: easy-query-test
+      TZ: Asia/Shanghai
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --lower-case-table-names=1
+      - --max-connections=200
+    ports:
+      - "3318:3306"
+    volumes:
+      - polardb-data:/var/lib/mysql
+    healthcheck:
+      test: [CMD-SHELL, 'MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql --protocol=TCP -h 127.0.0.1 -u root -e "SELECT 1" >/dev/null']
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 20s
+
+  hana:
+    profiles: [hana]
+    build: ./hana
+    image: easy-query-dev/hana:2.00.088
+    platform: linux/amd64
+    hostname: hxehost
+    restart: unless-stopped
+    # SAP 公布的最低内存是 8g；HANA 把 cgroup 上限当物理内存，不要靠调大掩盖失败
+    mem_limit: 12g
+    memswap_limit: 12g
+    shm_size: 2g
+    stop_grace_period: 2m
+    environment:
+      EQ_HANA_PASSWORD: ${EQ_HANA_PASSWORD:?run infra/dev/db.sh to create .local/db.env}
+      TZ: Asia/Shanghai
+    ports:
+      - "39041:39041"
+      - "39017:39017"
+    volumes:
+      - hana-data:/hana/mounts
+    tmpfs:
+      - /run/eq:size=1m,mode=0700,uid=12000,gid=79
+    entrypoint: [/bin/bash, /eq/start.sh]
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+    sysctls:
+      kernel.shmmax: 1073741824
+      kernel.shmmni: 32768
+      kernel.shmall: 8388608
+      net.ipv4.ip_local_port_range: "40000 60999"
+    healthcheck:
+      test: [CMD, /bin/bash, /eq/health.sh]
+      interval: 5s
+      timeout: 5s
+      retries: 180
+      start_period: 2m
+
+volumes:
+  mysql-data:
+  postgres-data:
+  polardb-data:
+  hana-data:

@@ -399,3 +399,6 @@ nbdist/
 **/target/
 
 .DS_Store
+
+# 本地开发数据库密码与连接说明（infra/dev/db.sh 生成）
+/.local/

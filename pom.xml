@@ -46,6 +46,8 @@
         <module>sql-ksp-processor</module>
         <!--        以下是不需要deploy到远程仓库的-->
         <module>sql-test</module>
+        <!-- fork 的测试模块：不发布，mvn test 与 CI 跑它 -->
+        <module>sql-fork-test</module>
     </modules>
 
     <properties>
