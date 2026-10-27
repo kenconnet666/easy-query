@@ -6,6 +6,8 @@ import com.easy.query.core.proxy.PropTypeColumn;
 import com.easy.query.core.proxy.extension.dialect.DialectExpressions;
 import com.easy.query.core.util.EasyObjectUtil;
 import com.easy.query.pgsql.config.PgSQLDialectMarker;
+import com.easy.query.pgsql.proxy.PgSQLArray;
+import com.easy.query.pgsql.proxy.PgSQLFullText;
 import com.easy.query.pgsql.proxy.PgSQLJsonb;
 import com.easy.query.pgsql.proxy.PgSQLReturning;
 
@@ -22,9 +24,21 @@ public final class PgSQL {
     private PgSQL() { }
 
     /** 把列当作 jsonb（jsonb、json 或存 JSON 文字的列，都先转成 jsonb）。 */
-    public static PgSQLJsonb jsonb(PropTypeColumn<?> column) {
+    public static <T> PgSQLJsonb<T> jsonb(PropTypeColumn<T> column) {
         DialectExpressions.require(column, PgSQLDialectMarker.class, "PgSQL.jsonb");
-        return new PgSQLJsonb(column);
+        return new PgSQLJsonb<>(column);
+    }
+
+    /** fork：数组列（{@code text[]}、{@code int[]} …）的条件：{@code PgSQL.array(u.tags()).has("vip")} */
+    public static PgSQLArray array(PropTypeColumn<?> column) {
+        DialectExpressions.require(column, PgSQLDialectMarker.class, "PgSQL.array");
+        return new PgSQLArray(column);
+    }
+
+    /** fork：全文检索：{@code PgSQL.fulltext(p.body()).matches("easy -jdbc")}，相关度 {@code .rank(..)} */
+    public static PgSQLFullText fulltext(PropTypeColumn<?> column) {
+        DialectExpressions.require(column, PgSQLDialectMarker.class, "PgSQL.fulltext");
+        return new PgSQLFullText(column);
     }
 
     /**

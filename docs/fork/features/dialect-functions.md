@@ -29,6 +29,11 @@ List<User> vip = easyEntityQuery.queryable(User.class)
 | | `score(words[, mode])` | 同上，作为值 | select、orderBy 用 |
 | `PgSQL.jsonb(col)` | `contains(document)` / `containedBy(document)` | `col::jsonb @> ?::jsonb` / `<@` | |
 | | `hasKey(key)`、`hasAnyKey(keys...)`、`hasAllKeys(keys...)` | `jsonb_exists*(col::jsonb, …)` | 不用 `?` 运算符：会被 JDBC 当成占位符 |
+| | `edit(e -> e.set(path, json).remove(path).merge(document))` | `jsonb_set(…, ?::text[], ?::jsonb, true)` / `… #- ?::text[]` / `… \|\| ?::jsonb` | path 用点分隔（`"a.b"`、`"tags.0"`）；值是 JSON 文字；结果与列同类型，update 里写回 |
+| `PgSQL.array(col)` | `has(v)`、`hasAll(vs...)`、`hasAny(vs...)` | `? = ANY(col)`（多个值用 AND / OR 连） | 参数不必与元素类型完全一致；col 要是列（会被引用多次） |
+| | `length()` | `cardinality(col)` | 值 |
+| `PgSQL.fulltext(col)` | `matches([config, ]query)` | `to_tsvector('simple', col) @@ websearch_to_tsquery('simple', ?)` | 搜索引擎式查询串：`a b`、`"a b"`、`a or b`、`-a`；config 默认 `simple`，要走索引须与表达式索引一致 |
+| | `rank([config, ]query)` | `ts_rank(…)` | 值，select / orderBy 用 |
 
 MySQL 的函数都在 8.0.18（生产 PolarDB 的内核）上实测过。读 JSON 里的值不在这里，用已有的 `u.attrs().asJSONObject().getString("name")`。
 
