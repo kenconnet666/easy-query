@@ -7,6 +7,7 @@ import com.easy.query.core.func.SQLFuncImpl;
 import com.easy.query.core.func.SQLFunction;
 import com.easy.query.core.func.column.ColumnExpression;
 import com.easy.query.core.func.column.ColumnFuncSelector;
+import com.easy.query.core.func.def.enums.DateTruncEnum;
 import com.easy.query.core.func.column.impl.ColumnFuncValueExpressionImpl;
 import com.easy.query.core.func.def.AnySQLFunction;
 import com.easy.query.core.func.def.enums.DateTimeDurationEnum;
@@ -329,5 +330,30 @@ public class HanaSQLFuncImpl extends SQLFuncImpl {
             sb.append('{').append(i).append('}');
         }
         return sb.toString();
+    }
+    /**
+     * fork：HANA 2.0 没有 DATE_TRUNC，用 TO_VARCHAR 保留到该粒度、补零后 TO_SECONDDATE；季度、周再用 ADD_MONTHS / ADD_DAYS 回退（WEEKDAY 周一为 0）
+     */
+    @Override
+    public SQLFunction dateTrunc(SQLActionExpression1<ColumnFuncSelector> sqlExpression, DateTruncEnum unit) {
+        switch (unit) {
+            case YEAR: return anySQLFunction("TO_SECONDDATE(TO_VARCHAR({0},'YYYY') || '-01-01 00:00:00','YYYY-MM-DD HH24:MI:SS')", sqlExpression);
+            case QUARTER: return anySQLFunction("ADD_MONTHS(TO_SECONDDATE(TO_VARCHAR({0},'YYYY-MM') || '-01 00:00:00','YYYY-MM-DD HH24:MI:SS'), -MOD(MONTH({1}) - 1, 3))", twice(sqlExpression));
+            case MONTH: return anySQLFunction("TO_SECONDDATE(TO_VARCHAR({0},'YYYY-MM') || '-01 00:00:00','YYYY-MM-DD HH24:MI:SS')", sqlExpression);
+            case WEEK: return anySQLFunction("ADD_DAYS(TO_SECONDDATE(TO_VARCHAR({0},'YYYY-MM-DD'),'YYYY-MM-DD'), -WEEKDAY({1}))", twice(sqlExpression));
+            case DAY: return anySQLFunction("TO_SECONDDATE(TO_VARCHAR({0},'YYYY-MM-DD'),'YYYY-MM-DD')", sqlExpression);
+            case HOUR: return anySQLFunction("TO_SECONDDATE(TO_VARCHAR({0},'YYYY-MM-DD HH24') || ':00:00','YYYY-MM-DD HH24:MI:SS')", sqlExpression);
+            case MINUTE: return anySQLFunction("TO_SECONDDATE(TO_VARCHAR({0},'YYYY-MM-DD HH24:MI') || ':00','YYYY-MM-DD HH24:MI:SS')", sqlExpression);
+            case SECOND: return anySQLFunction("TO_SECONDDATE(TO_VARCHAR({0},'YYYY-MM-DD HH24:MI:SS'),'YYYY-MM-DD HH24:MI:SS')", sqlExpression);
+            default: throw new UnsupportedOperationException("HANA dateTrunc does not support " + unit);
+        }
+    }
+
+    /** 模板里同一个参数要出现两次时选两次（占位符不能重复，参数按选择的顺序绑定） */
+    private static SQLActionExpression1<ColumnFuncSelector> twice(SQLActionExpression1<ColumnFuncSelector> sqlExpression) {
+        return s -> {
+            sqlExpression.apply(s);
+            sqlExpression.apply(s);
+        };
     }
 }

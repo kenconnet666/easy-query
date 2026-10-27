@@ -51,7 +51,7 @@ M3b：
 - [x] 3.4 窗口（[features/window.md](features/window.md)）：ROWS/RANGE frame、`over()` 全局窗口、ntile / percent_rank / cume_dist；8 份重复的窗口实现收成 OverSQLFunction / OverBuilder
 - [ ] 3.5 ROLLUP / CUBE / GROUPING SETS 与 `grouping()` 标记
 - [x] 3.6 NULLIF；null-safe 等值 `eqNullSafe`（[features/null-safe.md](features/null-safe.md)）：MySQL `<=>`、PG `IS NOT DISTINCT FROM`，其他方言用等价的 OR 写法
-- [ ] 3.7 日期截断（年/季/月/周/日/时）
+- [x] 3.7 日期截断 `dateTrunc`（[features/date-trunc.md](features/date-trunc.md)）：年/季/月/周/日/时/分/秒；PG、MySQL、HANA 实测，其它方言明确报不支持
 - [ ] 3.8 RETURNING（PG 等支持的方言；MySQL/HANA 明确报错）
 - [ ] 3.9 FOR UPDATE 的 NOWAIT / SKIP LOCKED
 

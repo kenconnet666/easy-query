@@ -4,6 +4,7 @@ import com.easy.query.core.expression.lambda.SQLActionExpression1;
 import com.easy.query.core.expression.parser.core.SQLTableOwner;
 import com.easy.query.core.func.column.ColumnFuncSelector;
 import com.easy.query.core.func.def.enums.DateTimeDurationEnum;
+import com.easy.query.core.func.def.enums.DateTruncEnum;
 import com.easy.query.core.func.def.enums.DateTimeUnitEnum;
 import com.easy.query.core.func.def.enums.TimeUnitEnum;
 
@@ -223,6 +224,16 @@ public interface SQLDateTimeFunc {
      * @return 时间格式添加函数
      */
     SQLFunction dateTimeProperty(SQLActionExpression1<ColumnFuncSelector> sqlExpression, DateTimeUnitEnum dateTimeUnitEnum);
+
+    /**
+     * fork：截到 unit 的起点（DATE_TRUNC 语义），结果是日期时间；WEEK 以周一开始。
+     * PG 用 DATE_TRUNC，MySQL、HANA 用格式化组合；其它方言覆盖前调用会抛 {@link UnsupportedOperationException}。
+     *
+     * @param sqlExpression 只选一项；部分方言的写法里会被调用多次
+     */
+    default SQLFunction dateTrunc(SQLActionExpression1<ColumnFuncSelector> sqlExpression, DateTruncEnum unit) {
+        throw new UnsupportedOperationException("dateTrunc(" + unit + ") is not supported by " + getClass().getSimpleName());
+    }
 
     /**
      * 相差时间函数
