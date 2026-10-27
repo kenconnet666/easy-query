@@ -42,6 +42,8 @@ public enum DatabaseEnum {
     GAUSS_DB,
     DB2,
     DUCKDB,
+    // fork：SAP HANA
+    HANA,
     SQL92,
     TSDB
 }

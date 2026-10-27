@@ -57,6 +57,13 @@
             <version>${project.version}</version>
             <scope>compile</scope>
         </dependency>
+        <!-- fork：SAP HANA 方言 -->
+        <dependency>
+            <groupId>com.easy-query</groupId>
+            <artifactId>sql-hana</artifactId>
+            <version>${project.version}</version>
+            <scope>compile</scope>
+        </dependency>
         <dependency>
             <groupId>com.easy-query</groupId>
             <artifactId>sql-kingbase-es</artifactId>
