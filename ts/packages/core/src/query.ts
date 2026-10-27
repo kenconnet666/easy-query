@@ -270,7 +270,7 @@ type Reader = (row: Record<string, unknown>) => unknown
 
 /** toList 等待第二条查询填充的数组：父行的键 → 这些父行上的数组 */
 interface PendingList {
-  readonly list: ListOf<unknown>
+  readonly list: ListOf<unknown, boolean>
   readonly slots: Map<string, { readonly key: unknown; readonly arrays: unknown[][] }>
 }
 
@@ -278,6 +278,8 @@ interface PendingList {
 class ShapeCompiler {
   readonly columns: { e: Node; as: string }[] = []
   readonly lists: PendingList[] = []
+  /** first() 的数组在第二条查询填完后换成第一项或 null */
+  readonly fixups: (() => void)[] = []
   read: Reader = () => undefined
   private readonly ctx: Context
 
@@ -286,6 +288,7 @@ class ShapeCompiler {
   }
 
   compile(shape: unknown): void {
+    if (shape instanceof ListOf && shape.single) throw new TypeError('first() must be a property of a select object')
     this.read = this.reader(shape)
   }
 
@@ -303,8 +306,15 @@ class ShapeCompiler {
     if (Array.isArray(x) || x === null || typeof x !== 'object') {
       throw new TypeError(`select values must be expressions, navigations, toList() or nested objects; got ${Array.isArray(x) ? 'an array' : String(x)}`)
     }
-    const entries = Object.entries(x).map(([k, v]) => [k, this.reader(v)] as const)
-    return (row) => Object.fromEntries(entries.map(([k, read]) => [k, read(row)]))
+    const entries = Object.entries(x).map(([k, v]) => [k, this.reader(v), v instanceof ListOf && v.single] as const)
+    return (row) => {
+      const obj: Record<string, unknown> = {}
+      for (const [k, read, single] of entries) {
+        obj[k] = read(row)
+        if (single) this.fixups.push(() => { obj[k] = (obj[k] as unknown[])[0] ?? null })
+      }
+      return obj
+    }
   }
 
   private expr(e: Expr<unknown>): Reader {
@@ -327,7 +337,7 @@ class ShapeCompiler {
     }
   }
 
-  private list(list: ListOf<unknown>): Reader {
+  private list(list: ListOf<unknown, boolean>): Reader {
     const keyAs = this.hidden(columnNode(list.many.scope, list.many.parent[REF], list.many.relation.from))
     const pending: PendingList = { list, slots: new Map() }
     this.lists.push(pending)
@@ -364,6 +374,7 @@ async function run(ctx: Context, select: SelectNode, shape: ShapeCompiler): Prom
   const rows = await query(ctx, render(ctx, select))
   const out = rows.map(shape.read)
   await fillLists(ctx, shape.lists)
+  shape.fixups.forEach((f) => f())
   return out
 }
 
@@ -392,11 +403,28 @@ async function fillLists(ctx: Context, lists: readonly PendingList[]): Promise<v
         joins: scope.joins, where: [{ k: 'in', e: toNode, list: keys, not: false }, ...where],
         groupBy: [], having: [], orderBy, columns: shape.columns, distinct: false, limit: undefined, offset: undefined, forUpdate: false,
       }
-      for (const row of await query(ctx, render(ctx, select))) {
+      for (const row of await query(ctx, render(ctx, many.take === undefined ? select : perParent(select, toNode, many.take)))) {
         const item = shape.read(row)
         for (const array of pending.slots.get(String(row[keyAs]))?.arrays ?? []) array.push(item)
       }
     }
     await fillLists(ctx, shape.lists)
+    shape.fixups.forEach((f) => f())
+  }
+}
+
+/**
+ * 每个父行只取前 take 条：内层按关联列分区编号，外层只留编号 <= take 的行。
+ * SELECT eq_w.c0, … FROM (SELECT …, ROW_NUMBER() OVER (PARTITION BY 关联列 ORDER BY …) AS eq_rn FROM … WHERE …) eq_w WHERE eq_w.eq_rn <= take
+ */
+function perParent(select: SelectNode, key: Node, take: number): SelectNode {
+  const rn: Node = { k: 'over', fn: { k: 'lit', sql: 'ROW_NUMBER()' }, partition: [key], order: select.orderBy, frame: undefined }
+  const inner: SelectNode = { ...select, orderBy: [], columns: [...select.columns, { e: rn, as: 'eq_rn' }] }
+  const col = (name: string): Node => ({ k: 'col', alias: 'eq_w', name })
+  return {
+    from: { table: '', alias: 'eq_w', sub: inner },
+    joins: [], where: [{ k: 'op', op: '<=', l: col('eq_rn'), r: { k: 'lit', sql: String(take) } }],
+    groupBy: [], having: [], orderBy: [{ e: col('eq_rn'), desc: false }],
+    columns: select.columns.map((c) => ({ e: col(c.as), as: c.as })), distinct: false, limit: undefined, offset: undefined, forUpdate: false,
   }
 }

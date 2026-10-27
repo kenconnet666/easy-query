@@ -1,7 +1,7 @@
 /**
  * 类型层面的检查：只参与 tsc，不运行。正例用 Equal 断言推导出的类型，负例用 @ts-expect-error 固定"必须报错"。
  */
-import { col, createDb, defineSchema, entity, sql, type Adapter, type Insert, type Row } from '../src/index.ts'
+import { col, createDb, defineSchema, entity, sql, win, type Adapter, type Insert, type Row } from '../src/index.ts'
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
 function expect<T extends true>(): T | void {}
@@ -65,6 +65,14 @@ async function results() {
 
   const groups = await db.queryable(Post).groupBy((p) => ({ userId: p.userId })).select((g) => ({ ...g.key, n: g.count(), max: g.max((p) => p.title) })).toList()
   expect<Equal<typeof groups, { userId: number; n: number; max: string | null }[]>>()
+
+  const latest = await db.queryable(User).select((u) => ({
+    first: u.posts.orderBy((p) => p.id.desc()).first((p) => ({ title: p.title })),
+    top: u.posts.limit(3).toList(),
+    rn: win.rowNumber((w) => w.partitionBy(u.companyId)),
+    running: win.sum(u.age, (w) => w.orderBy(u.id).rows('unboundedPreceding', 'currentRow')),
+  })).toList()
+  expect<Equal<typeof latest, { first: { title: string } | null; top: Row<typeof Post>[]; rn: number; running: number | null }[]>>()
 
   const keys = await db.queryable(Post).groupBy((p) => ({ userId: p.userId })).toList()
   expect<Equal<typeof keys, { userId: number }[]>>()

@@ -102,7 +102,7 @@ const list = await db.queryable(User)
 - 终结方法：`toList()`、`first()`（可能 undefined）、`single()`（不存在抛错）、`count()`、`any()`、`toPage(page, size)` → `{ rows, total }`。
 - 不写 `select` 时返回整行 `UserRow`；`.include(u => ({ company: u.company, posts: u.posts.where(...).toList() }))` 把导航挂到整行上，类型变成 `UserRow & { company: CompanyRow | null; posts: PostRow[] }`。
 - 条件组合：数组 = AND；`or(...)`、`and(...)`、`not(...)` 是普通函数；比较方法 `eq ne gt ge lt le in notIn like startsWith endsWith isNull isNotNull between`。
-- 隐式子查询：`any / none / count / sum / avg / max / min / toList`；可先 `.where(...)` 再聚合（`first`、每个父行取前 N 条在 T3）。
+- 隐式子查询：`any / none / count / sum / avg / max / min / toList`；可先 `.where(...)` 再聚合。`u.posts.orderBy(..).first(..)` 得到一项或 null，`.limit(n).toList(..)` 每个父行最多 n 条（第二条查询里用 `ROW_NUMBER() OVER (PARTITION BY 关联列)` 截取，不把子表全拉回来）。
 - 构建器不可变：方法只记下 lambda，执行时才求值，所以 `const base = db.queryable(User).where(...)` 可以分别 `base.count()`、`base.limit(10).toList()`。
 
 分组：
@@ -115,7 +115,7 @@ const stats = await db.queryable(Post)
   .toList()
 ```
 
-窗口（与 Java 版 M3.4 同步，T3）：`p.amount.sum().over(w => w.partitionBy(p.userId).orderBy(p.id).rows('unboundedPreceding', 'currentRow'))`。
+窗口（与 Java 版 M3.4 同一组能力）：`win.rowNumber(w => w.partitionBy(p.userId).orderBy(p.id.desc()))`、`win.sum(p.amount, w => w.partitionBy(p.userId).orderBy(p.id).rows('unboundedPreceding', 'currentRow'))`、`win.lag / lead / rank / denseRank / ntile / count / avg / max / min`；不传窗口就是 `OVER ()`。
 
 ## 4. 写入
 
