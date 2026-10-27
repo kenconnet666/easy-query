@@ -77,4 +77,15 @@ public interface DSLColumnComparePredicate<TProperty> extends TablePropColumn, E
         
     }
 
+
+    /** fork：两列 null 安全的相等（都为 NULL 也算相等），见 {@link DSLValuePredicate#eqNullSafe} */
+    default <TProxy, TProp> void eqNullSafe(SQLColumn<TProxy, TProp> column) {
+        eqNullSafe(true, column);
+    }
+
+    default <TProxy, TProp> void eqNullSafe(boolean condition, SQLColumn<TProxy, TProp> column) {
+        if (condition) {
+            NullSafePredicates.accept(this, getEntitySQLContext(), s -> s.column(column.getTable(), column.getValue()));
+        }
+    }
 }

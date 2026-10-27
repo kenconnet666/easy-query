@@ -14,6 +14,20 @@ import com.easy.query.core.proxy.impl.SQLPredicateImpl;
 public interface DSLValuePredicate<TProperty> extends TablePropColumn, EntitySQLContextAvailable {
 
     /**
+     * fork：column 与 val 相等，NULL 与 NULL 也算相等（MySQL <=>、PG IS NOT DISTINCT FROM，其它库用等价的 OR 写法）
+     * @param val 比较值，可以是 null
+     */
+    default void eqNullSafe(TProperty val) {
+        eqNullSafe(true, val);
+    }
+
+    default void eqNullSafe(boolean condition, TProperty val) {
+        if (condition) {
+            NullSafePredicates.accept(this, getEntitySQLContext(), s -> s.value(_toFunctionSerializeValue(val)));
+        }
+    }
+
+    /**
      * column >= val
      * @param val 比较值
      */

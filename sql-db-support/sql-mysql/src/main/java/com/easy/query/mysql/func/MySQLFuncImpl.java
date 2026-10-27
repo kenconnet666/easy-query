@@ -34,4 +34,13 @@ public class MySQLFuncImpl extends SQLFuncImpl {
         }
         return likeSQLFunction;
     }
+
+    /** fork：null 安全相等用 MySQL 的 <=>，两边各渲染一次 */
+    @Override
+    public SQLFunction nullSafeEquals(SQLActionExpression1<ColumnFuncSelector> left, SQLActionExpression1<ColumnFuncSelector> right) {
+        return anySQLFunction("({0} <=> {1})", s -> {
+            left.apply(s);
+            right.apply(s);
+        });
+    }
 }

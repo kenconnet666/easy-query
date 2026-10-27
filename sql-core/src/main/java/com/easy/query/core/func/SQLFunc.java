@@ -42,6 +42,23 @@ public interface SQLFunc extends AggregateSQLFunc, SQLStringFunc, SQLDateTimeFun
      */
     SQLFunction nullOrDefault(SQLActionExpression1<ColumnFuncSelector> sqlExpression);
 
+    /**
+     * fork：null 安全的相等（两边都为 NULL 也算相等），结果是布尔条件。
+     * 默认写成 {@code ((a = b) OR (a IS NULL AND b IS NULL))}；MySQL 用 {@code <=>}，PG 用 {@code IS NOT DISTINCT FROM}。
+     *
+     * @param left  左边，只选一项
+     * @param right 右边，只选一项
+     */
+    default SQLFunction nullSafeEquals(SQLActionExpression1<ColumnFuncSelector> left, SQLActionExpression1<ColumnFuncSelector> right) {
+        // 模板里每个占位符只能出现一次（参数按选择的顺序绑定），所以两边各选两次
+        return anySQLFunction("(({0} = {1}) OR ({2} IS NULL AND {3} IS NULL))", s -> {
+            left.apply(s);
+            right.apply(s);
+            left.apply(s);
+            right.apply(s);
+        });
+    }
+
     SQLFunction equalsWith(SQLActionExpression1<ColumnFuncSelector> sqlExpression);
 
     default SQLFunction orderByNullsMode(TableAvailable table, String property, boolean asc, @NotNull OrderByModeEnum orderByModeEnum) {

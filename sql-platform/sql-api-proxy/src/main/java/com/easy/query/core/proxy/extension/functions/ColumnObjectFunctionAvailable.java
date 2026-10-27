@@ -71,6 +71,26 @@ public interface ColumnObjectFunctionAvailable<TProperty, TChain> extends SQLSel
         }, getPropertyType());
     }
 
+    /**
+     * fork：NULLIF(column, value)：等于 value 时为 NULL，否则是原值；常见用法 {@code o.title().nullIf("")} 把空串当 NULL
+     */
+    default TChain nullIf(TProperty value) {
+        return createChainExpression(fx -> fx.anySQLFunction("NULLIF({0}, {1})", s -> {
+            PropTypeColumn.acceptAnyValue(s, this);
+            s.value(_toFunctionSerializeValue(value));
+        }), getPropertyType());
+    }
+
+    /**
+     * fork：NULLIF(column, other)：两列相等时为 NULL
+     */
+    default TChain nullIf(PropTypeColumn<TProperty> other) {
+        return createChainExpression(fx -> fx.anySQLFunction("NULLIF({0}, {1})", s -> {
+            PropTypeColumn.acceptAnyValue(s, this);
+            PropTypeColumn.columnFuncSelector(s, other);
+        }), getPropertyType());
+    }
+
     default TChain nullOrDefault(TProperty value) {
         return nullOrDefault(o -> o.value(_toFunctionSerializeValue(value)));
     }
