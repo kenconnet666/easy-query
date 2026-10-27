@@ -7,7 +7,7 @@
 
 ## 执行顺序
 
-M0 → M1 → M2 → M3a（flow 用得上的 3.1–3.3）→ M5（T0–T2）→ M3b（3.4–3.9）→ M4 → M5（T3）→ M6。
+M0 → M1 → M2 → M3a（flow 用得上的 3.1–3.2）→ M5（T0–T2）→ M3b（3.3–3.9）→ M4 → M5（T3）→ M6。
 某项进入"待决"时跳到顺序里下一个不依赖它的项。
 
 ## M0 地基
@@ -45,7 +45,7 @@ M0 → M1 → M2 → M3a（flow 用得上的 3.1–3.3）→ M5（T0–T2）→ 
 M3a（flow 用得上，先做；验收 = 在 flow 本地分支改写对应代码）：
 - [ ] 3.1 查询级表名映射：一条查询里把实体 A、B… 映射到别的表，导航、隐式 join、隐式子查询、include 都跟随（现状：`asTable` 只改最近一张表，已用样板证实）。先在 decisions 里比较 `ExpressionBuilderFactory` 替换与拦截器两条路，再定 API。验收：flow 的 InboxQueries / Participation 去掉热表归档表分支
 - [ ] 3.2 类型化 INSERT … SELECT（含插入到另一张同结构表）。验收：flow 的 Archives 去掉 information_schema 与拼接 SQL
-- [ ] 3.3 内置 JSON 列转换器 + JsonCodec SPI：按字段泛型类型（List<Foo>、Map<String,Object>）编解码，codec 可换（Jackson / 用户自带）。验收：flow 的 JsonColumns 缩短
+- [ ] 3.3 内置 JSON 列转换器 + JsonCodec SPI：按字段泛型类型（List<Foo>、Map<String,Object>）编解码，codec 可换（Jackson / 用户自带）。flow 收益很小（见 flow.md），验收用 sql-fork-test 的实体
 
 M3b：
 - [ ] 3.4 窗口：ROWS/RANGE frame、空 partition 的全局窗口（rank/sum 等现在要求 partitionBy）、ntile / percent_rank / cume_dist

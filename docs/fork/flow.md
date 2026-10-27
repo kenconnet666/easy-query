@@ -11,7 +11,6 @@ flow（C:\Users\lionheart\IdeaProjects\flow）是 fork 的第一个真实使用�
 | M1.4 Instant 进代理的日期时间类型 | `StatsQueries.nodes` 用 `asLocalDateTime()` 骗编译器 | 直接 `w.createdAt().duration(w.completedAt())` |
 | M3.1 查询级表名映射 | `Archives.from/query` 遍布 InboxQueries、Participation；归档的待办导航指向热表，要 `attachArchivedInstances` 手工补实例；抄送的归档分支改写成 exists | 一处声明"这条查询用归档表"，导航、隐式子查询、`selectAutoInclude` 都跟着走；删掉补实例与改写的分支 |
 | M3.2 类型化 INSERT … SELECT | `Archives.archiveBatch` 拼 SQL、查 `information_schema` 取列、反引号 | 用实体元数据生成列清单，不再读 information_schema、不再拼字符串 |
-| M3.3 内置 JSON 列转换器 + codec SPI | `JsonColumns` 150 行，每种类型手写 ValueConverter | 简单的（FormValues、Variables、ObjectJson）换成通用转换器 + json-wire codec；形状特殊的（RunState）保留 |
 
 ## flow 自己就能改、不等 fork 的
 
@@ -20,6 +19,7 @@ flow（C:\Users\lionheart\IdeaProjects\flow）是 fork 的第一个真实使用�
 
 ## 不为 flow 做的
 
+- M3.3 内置 JSON 列转换器：flow 存的是 json-wire 的 typed JSON，RunState 等形状是手写的；三个简单转换器（FormValues、Variables、ObjectJson）各两行，换成通用转换器还要写一个 codec 类，净省几乎为零。M3.3 仍对一般用户有用，但不算 flow 的验收项。
 - 事务隔离级别检查的跨库写法：flow 只支持 MySQL，`SELECT @@transaction_isolation` 在 8.0.18 可用，不需要。
 - 待办两段查询改 UNION：现在的写法是为了走索引，进 BACKLOG 评估。
 - HANA / PG：flow 不需要。
