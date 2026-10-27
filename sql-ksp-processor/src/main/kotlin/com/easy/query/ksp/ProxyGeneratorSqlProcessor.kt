@@ -57,7 +57,11 @@ class ProxyGeneratorSqlProcessor(
             "java.util.Date" to KspPropertyColumn("SQLUtilDateTypeColumn", "java.util.Date"),
             "java.time.LocalDate" to KspPropertyColumn("SQLLocalDateTypeColumn", "java.time.LocalDate"),
             "java.time.LocalDateTime" to KspPropertyColumn("SQLLocalDateTimeTypeColumn", "java.time.LocalDateTime"),
-            "java.time.LocalTime" to KspPropertyColumn("SQLLocalTimeTypeColumn", "java.time.LocalTime")
+            "java.time.LocalTime" to KspPropertyColumn("SQLLocalTimeTypeColumn", "java.time.LocalTime"),
+            // fork：带时区的时刻类型（与 APT 的映射一致）
+            "java.time.Instant" to KspPropertyColumn("SQLInstantTypeColumn", "java.time.Instant"),
+            "java.time.OffsetDateTime" to KspPropertyColumn("SQLOffsetDateTimeTypeColumn", "java.time.OffsetDateTime"),
+            "java.time.ZonedDateTime" to KspPropertyColumn("SQLZonedDateTimeTypeColumn", "java.time.ZonedDateTime")
         )
 
         private const val FIELD_DOC_COMMENT_TEMPLATE = "\n" +

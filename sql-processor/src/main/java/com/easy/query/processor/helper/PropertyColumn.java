@@ -37,6 +37,10 @@ public class PropertyColumn {
         IMPORT_MAPPING.put("SQLTimeTypeColumn", "com.easy.query.core.proxy.columns.types.SQLTimeTypeColumn");
         IMPORT_MAPPING.put("SQLUtilDateTypeColumn", "com.easy.query.core.proxy.columns.types.SQLUtilDateTypeColumn");
         IMPORT_MAPPING.put("SQLUUIDTypeColumn", "com.easy.query.core.proxy.columns.types.SQLUUIDTypeColumn");
+        // fork：带时区的时刻类型也生成日期时间列（之前回退成 SQLAnyTypeColumn，没有日期函数）
+        IMPORT_MAPPING.put("SQLInstantTypeColumn", "com.easy.query.core.proxy.columns.types.SQLInstantTypeColumn");
+        IMPORT_MAPPING.put("SQLOffsetDateTimeTypeColumn", "com.easy.query.core.proxy.columns.types.SQLOffsetDateTimeTypeColumn");
+        IMPORT_MAPPING.put("SQLZonedDateTimeTypeColumn", "com.easy.query.core.proxy.columns.types.SQLZonedDateTimeTypeColumn");
     }
 
     public PropertyColumn(String sqlColumnName, String propertyType) {
@@ -110,6 +114,12 @@ public class PropertyColumn {
                 return "getUtilDateTypeColumn";
             case "SQLUUIDTypeColumn":
                 return "getUUIDTypeColumn";
+            case "SQLInstantTypeColumn":
+                return "getInstantTypeColumn";
+            case "SQLOffsetDateTimeTypeColumn":
+                return "getOffsetDateTimeTypeColumn";
+            case "SQLZonedDateTimeTypeColumn":
+                return "getZonedDateTimeTypeColumn";
         }
         return "getAnyTypeColumn";
     }
