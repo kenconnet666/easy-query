@@ -5,6 +5,7 @@ import com.easy.query.core.expression.lambda.SQLFuncExpression2;
 import com.easy.query.core.expression.parser.core.available.TableAvailable;
 import com.easy.query.core.func.SQLFunc;
 import com.easy.query.core.func.SQLFunction;
+import com.easy.query.core.func.def.enums.DateTruncEnum;
 import com.easy.query.core.func.def.enums.DateTimeUnitEnum;
 import com.easy.query.core.func.def.enums.TimeUnitEnum;
 import com.easy.query.core.expression.parser.core.PropColumn;
@@ -296,6 +297,13 @@ public interface ColumnDateTimeFunctionAvailable<TProperty> extends ColumnObject
      * @param dateTimeUnitEnum 时间枚举
      * @return 返回时间属性的表达式
      */
+    /**
+     * fork：截到 unit 的起点，更小的部分清零，例如按月汇总 {@code GroupKeys.of(o.createTime().dateTrunc(DateTruncEnum.MONTH))}；WEEK 以周一开始
+     */
+    default DateTimeTypeExpression<TProperty> dateTrunc(DateTruncEnum unit) {
+        return createChainExpression(fx -> fx.dateTrunc(s -> PropTypeColumn.acceptAnyValue(s, this), unit), getPropertyType());
+    }
+
     default NumberTypeExpression<Integer> dateTimeProp(DateTimeUnitEnum dateTimeUnitEnum) {
         PropColumn propColumn = this;
         return new NumberTypeExpressionImpl<>(this.getCurrentEntitySQLContext(), this.getTable(), null, fx -> {

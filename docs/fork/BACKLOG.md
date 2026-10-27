@@ -13,3 +13,4 @@
 - [M2] HANA 迁移 DDL（2.6）挪到 M3a 之后：flow 用 Flyway 脚本，ERP 是库优先，目前没人等它
 - [M3.3] Spring Boot 4 的 Jackson 3（`tools.jackson.databind`）自动适配 JsonCodec：现在只认 Jackson 2，只有 Jackson 3 时用户要自己提供 JsonCodec bean
 - [M3.3] PG json/jsonb 列写入字符串参数要 `stringtype=unspecified`；可评估让 PG 方言把 JsonValueConverter 的参数包成 PGobject / `?::jsonb`
+- [M3.7] dateTrunc 只实现了 PG、MySQL、HANA；SQL Server（DATETRUNC 2022+ / DATEADD+DATEDIFF）、Oracle（TRUNC(x, 'MM')）、H2 / DuckDB / Kingbase / GaussDB（DATE_TRUNC）待有人用时补

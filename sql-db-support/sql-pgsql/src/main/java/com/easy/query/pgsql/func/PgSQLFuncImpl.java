@@ -7,6 +7,7 @@ import com.easy.query.core.func.SQLFuncImpl;
 import com.easy.query.core.func.SQLFunction;
 import com.easy.query.core.func.column.ColumnExpression;
 import com.easy.query.core.func.column.ColumnFuncSelector;
+import com.easy.query.core.func.def.enums.DateTruncEnum;
 import com.easy.query.core.func.def.DistinctDefaultSQLFunction;
 import com.easy.query.core.func.def.enums.DateTimeDurationEnum;
 import com.easy.query.core.func.def.enums.DateTimeUnitEnum;
@@ -192,5 +193,11 @@ public class PgSQLFuncImpl extends SQLFuncImpl {
             left.apply(s);
             right.apply(s);
         });
+    }
+
+    /** fork：DATE_TRUNC('unit', x)；week 是 ISO 周（周一开始） */
+    @Override
+    public SQLFunction dateTrunc(SQLActionExpression1<ColumnFuncSelector> sqlExpression, DateTruncEnum unit) {
+        return anySQLFunction("DATE_TRUNC('" + unit.name().toLowerCase(java.util.Locale.ROOT) + "', {0})", sqlExpression);
     }
 }
