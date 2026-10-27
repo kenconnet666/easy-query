@@ -1,17 +1,20 @@
 # STATUS
 
-更新于 2026-10-27。保持 40 行以内：只写当前在做什么、最近完成什么、待决什么。
+更新于 2026-10-28。保持 40 行以内：只写当前在做什么、最近完成什么、待决什么。
 
 ## 当前
 
-- M0 收尾：PR `chore/m0-foundation` 等 CI。
+- 下一步 M3b（3.3 JSON 转换器 + codec SPI 起），之后 M4，再回 TS 的 T3。
+- flow 验收分支 `eq-fork-acceptance`（本地，不推送）：每个工作项前 fetch 并 merge flow 的 origin/master。
 
 ## 最近完成
 
-- json-wire 改为 Java 8（本地分支 `feat/java8`，已 install 到本机 `0.1.0-SNAPSHOT`；发布由用户手动做）。
-- 本地测试库：MySQL 8.4（3306/3316）、PG 17（54321）、Redis（55000）、HANA 2.00.088（39041，profile hana）、MySQL 8.0.18（3318，profile polardb）。
-- `sql-fork-test` 模块：fork 冒烟 + 上游不连库的 13 个类，JDK 8 下 202/202 通过。
-- 上游实库基线（docs/fork/baseline.md）：通过 2080、稳定非通过 57 条，均与 fork 无关。
+- M5 T0–T2：TS 版（`ts/`：@eqts/core、@eqts/sqlite、@eqts/mysql），共用实库套件在 SQLite、MySQL 8.0.18、8.4 上通过；设计与实现差异见 `decisions/0002-ts-design.md` 末节。
+- flow M3a 验收：归档改用 TableNameMapping + InsertSelect，5 文件净减 42 行，flow-it 两库各 100 个用例通过（见 `flow.md` 验收记录）。
+- M3.1 TableNameMapping、M3.2 InsertSelect；M2 HANA 方言（查询、函数、MERGE upsert、生成键回填、DST 安全的 LocalDateTime）。
+- M1：方言静态入口（MySQL.json / PgSQL.jsonb …）、Instant/OffsetDateTime/ZonedDateTime 列、窗口空格修复、JSON 数组 size、MySQL 8.0.18 审计。
+- json-wire 改为 Java 8（本地分支 `feat/java8`，已 install `0.1.0-SNAPSHOT`；发布由用户手动做）。
+- 本地测试库：MySQL 8.4（3306/3316）、8.0.18（3318，profile polardb）、PG 17（54321）、Redis（55000）、HANA 2.00.088（39041，profile hana）。
 
 ## 更正
 
@@ -19,4 +22,4 @@
 
 ## 待决（不阻塞，用户有空时看）
 
-- TS 版 T0–T2 完成（`ts/`：@eqts/core、@eqts/sqlite、@eqts/mysql），设计与实现差异见 `decisions/0002-ts-design.md` 末节；下一步 M3b，再回 T3。
+- TS 版草案里待确认的 5 点按原方案实施（列与关系分开定义、数组条件、默认值映射、显式 tx、包名 `@eqts/*`）；有异议时改动集中在 `ts/packages/core/src/schema.ts`、`relations.ts`。
