@@ -184,4 +184,13 @@ public class PgSQLFuncImpl extends SQLFuncImpl {
     public SQLFunction jsonArrayLength(SQLActionExpression1<ColumnFuncSelector> sqlExpression) {
         return new PgSQLJSONArrayLengthSQLFunction(getColumnExpressions(sqlExpression));
     }
+
+    /** fork：null 安全相等用 IS NOT DISTINCT FROM，两边各渲染一次 */
+    @Override
+    public SQLFunction nullSafeEquals(SQLActionExpression1<ColumnFuncSelector> left, SQLActionExpression1<ColumnFuncSelector> right) {
+        return anySQLFunction("({0} IS NOT DISTINCT FROM {1})", s -> {
+            left.apply(s);
+            right.apply(s);
+        });
+    }
 }

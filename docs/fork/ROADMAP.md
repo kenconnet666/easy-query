@@ -50,7 +50,7 @@ M3a（flow 用得上，先做；验收 = 在 flow 本地分支改写对应代码
 M3b：
 - [x] 3.4 窗口（[features/window.md](features/window.md)）：ROWS/RANGE frame、`over()` 全局窗口、ntile / percent_rank / cume_dist；8 份重复的窗口实现收成 OverSQLFunction / OverBuilder
 - [ ] 3.5 ROLLUP / CUBE / GROUPING SETS 与 `grouping()` 标记
-- [ ] 3.6 NULLIF；null-safe 等值（MySQL `<=>`、PG `IS NOT DISTINCT FROM`，其他方言用等价 CASE）
+- [x] 3.6 NULLIF；null-safe 等值 `eqNullSafe`（[features/null-safe.md](features/null-safe.md)）：MySQL `<=>`、PG `IS NOT DISTINCT FROM`，其他方言用等价的 OR 写法
 - [ ] 3.7 日期截断（年/季/月/周/日/时）
 - [ ] 3.8 RETURNING（PG 等支持的方言；MySQL/HANA 明确报错）
 - [ ] 3.9 FOR UPDATE 的 NOWAIT / SKIP LOCKED
