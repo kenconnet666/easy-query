@@ -24,6 +24,8 @@ export type Node =
   | { readonly k: 'agg'; readonly fn: AggregateFn; readonly arg: Node | undefined; readonly distinct: boolean }
   | { readonly k: 'case'; readonly when: readonly (readonly [Node, Node])[]; readonly else: Node | undefined }
   | { readonly k: 'exists'; readonly q: SelectNode; readonly not: boolean }
+  /** 窗口函数：fn OVER (PARTITION BY … ORDER BY … frame) */
+  | { readonly k: 'over'; readonly fn: Node; readonly partition: readonly Node[]; readonly order: readonly OrderNode[]; readonly frame: string | undefined }
   /** 标量子查询 */
   | { readonly k: 'sub'; readonly q: SelectNode }
 
@@ -33,6 +35,8 @@ export type AggregateFn = 'count' | 'sum' | 'avg' | 'max' | 'min'
 export interface TableRef {
   readonly table: string
   readonly alias: string
+  /** 派生表：FROM (子查询) alias；有它时 table 不用 */
+  readonly sub?: SelectNode
 }
 
 export interface Join extends TableRef {
@@ -87,6 +91,8 @@ export interface DeleteNode {
 export function checkAliases(q: SelectNode | UpdateNode | DeleteNode, outer: ReadonlySet<string> = new Set()): void {
   const declared = new Set(outer)
   declared.add(q.from.alias)
+  // 派生表是独立的语句：只能引用它自己声明的表
+  if (q.from.sub) checkAliases(q.from.sub)
   const joins = 'joins' in q ? q.joins : []
   for (const j of joins) declared.add(j.alias)
   const visit = (n: Node): void => {
@@ -107,6 +113,7 @@ export function checkAliases(q: SelectNode | UpdateNode | DeleteNode, outer: Rea
       case 'fn': n.args.forEach(visit); return
       case 'agg': if (n.arg) visit(n.arg); return
       case 'case': n.when.forEach(([w, t]) => { visit(w); visit(t) }); if (n.else) visit(n.else); return
+      case 'over': visit(n.fn); n.partition.forEach(visit); n.order.forEach((o) => visit(o.e)); return
       case 'exists': case 'sub': checkAliases(n.q, declared); return
     }
   }

@@ -116,21 +116,31 @@ export class ManyRef<S extends AnySchema, K extends EntityKey<S>> {
   readonly filters: readonly ((r: any) => Cond)[]
   readonly orders: readonly ((r: any) => OrderItem | readonly OrderItem[])[]
 
-  constructor(scope: Scope, parent: AnyRef, relation: Many, filters: readonly ((r: any) => Cond)[] = [], orders: readonly ((r: any) => OrderItem | readonly OrderItem[])[] = []) {
+  /** toList / first 时每个父行最多取几条（limit） */
+  readonly take: number | undefined
+
+  constructor(scope: Scope, parent: AnyRef, relation: Many, filters: readonly ((r: any) => Cond)[] = [], orders: readonly ((r: any) => OrderItem | readonly OrderItem[])[] = [], take?: number) {
     this.scope = scope
     this.parent = parent
     this.relation = relation
     this.filters = filters
     this.orders = orders
+    this.take = take
   }
 
   where(filter: (r: Ref<S, K>) => Cond): ManyRef<S, K> {
-    return new ManyRef(this.scope, this.parent, this.relation, [...this.filters, filter], this.orders)
+    return new ManyRef(this.scope, this.parent, this.relation, [...this.filters, filter], this.orders, this.take)
   }
 
   /** 只影响 toList 的顺序 */
   orderBy(order: (r: Ref<S, K>) => OrderItem | readonly OrderItem[]): ManyRef<S, K> {
-    return new ManyRef(this.scope, this.parent, this.relation, this.filters, [...this.orders, order])
+    return new ManyRef(this.scope, this.parent, this.relation, this.filters, [...this.orders, order], this.take)
+  }
+
+  /** toList 时每个父行最多 n 条（按 orderBy；用 ROW_NUMBER() OVER (PARTITION BY 关联列) 在库里截取） */
+  limit(n: number): ManyRef<S, K> {
+    if (!Number.isSafeInteger(n) || n <= 0) throw new RangeError(`limit must be a positive integer, got ${n}`)
+    return new ManyRef(this.scope, this.parent, this.relation, this.filters, this.orders, n)
   }
 
   /** 存在满足条件的行（EXISTS） */
@@ -156,7 +166,14 @@ export class ManyRef<S extends AnySchema, K extends EntityKey<S>> {
   toList(): ListOf<Row<S['entities'][K]>>
   toList<X>(shape: (r: Ref<S, K>) => X): ListOf<Selected<X>>
   toList(shape?: (r: any) => unknown): ListOf<unknown> {
-    return new ListOf(this, shape)
+    return new ListOf(this, shape, false)
+  }
+
+  /** 第一条（按 orderBy），没有时为 null；只能放在 select 的对象里 */
+  first(): ListOf<Row<S['entities'][K]>, true>
+  first<X>(shape: (r: Ref<S, K>) => X): ListOf<Selected<X>, true>
+  first(shape?: (r: any) => unknown): ListOf<unknown, true> {
+    return new ListOf(this.limit(1), shape, true)
   }
 
   private aggregate(fn: 'sum' | 'avg' | 'max' | 'min', value: (r: any) => Expr<unknown>): Expr<any> {
@@ -196,22 +213,26 @@ export class ManyRef<S extends AnySchema, K extends EntityKey<S>> {
 }
 
 /** select 里的一对多数组 */
-export class ListOf<R> {
+export class ListOf<R, Single extends boolean = false> {
   declare readonly __row: R
+  declare readonly __single: Single
   readonly many: ManyRef<any, any>
   readonly shape: ((r: any) => unknown) | undefined
+  /** first()：结果是一项或 null，而不是数组 */
+  readonly single: Single
 
-  constructor(many: ManyRef<any, any>, shape: ((r: any) => unknown) | undefined) {
+  constructor(many: ManyRef<any, any>, shape: ((r: any) => unknown) | undefined, single: Single) {
     this.many = many
     this.shape = shape
+    this.single = single
   }
 }
 
 /** select 形状对应的结果类型 */
 export type Selected<X> = X extends Expr<infer T>
   ? T
-  : X extends ListOf<infer R>
-    ? R[]
+  : X extends ListOf<infer R, infer Single>
+    ? Single extends true ? R | null : R[]
     : X extends { readonly [REF]: RefInfo<infer S, infer K, infer N> }
       ? N extends true ? Row<S['entities'][K]> | null : Row<S['entities'][K]>
       : X extends readonly unknown[]

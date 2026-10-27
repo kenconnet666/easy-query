@@ -3,7 +3,7 @@
  */
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { and, createDb, or, touch, type Expr, type Interceptor } from '../src/index.ts'
+import { and, createDb, or, touch, win, type Expr, type Interceptor } from '../src/index.ts'
 import { Comment, Company, Post, schema, seed, User, type TestEnv } from './fixture.ts'
 
 export function liveSuite(name: string, open: () => Promise<TestEnv>): void {
@@ -238,6 +238,36 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>): void {
       assert.equal((await db.queryable(User).where((u) => u.name.eq('dave')).single()).age, 1)
       await db.update(Post).set({ amount: '9.00' }).where((p) => p.id.eq(1)).execute()
       assert.equal((await db.queryable(Post).where((p) => p.id.eq(1)).single()).title, 'touched')
+    })
+  })
+
+  describe(`${name}: windows and per-parent limits`, () => {
+    it('computes row numbers, running totals, lag and global counts', async () => {
+      const { db } = await seeded()
+      const rows = await db.queryable(Post).orderBy((p) => p.id).select((p) => ({
+        id: p.id,
+        rn: win.rowNumber((w) => w.partitionBy(p.userId).orderBy(p.id.desc())),
+        running: win.sum(p.amount, (w) => w.partitionBy(p.userId).orderBy(p.id).rows('unboundedPreceding', 'currentRow')),
+        prev: win.lag(p.title, (w) => w.orderBy(p.id)),
+        total: win.count(),
+      })).toList()
+      assert.deepEqual(rows.map((r) => [r.id, r.rn, Number(r.running), r.prev, r.total]), [
+        [1, 2, 10.5, null, 4], [2, 1, 2010.5, 'orm tips', 4], [3, 2, 1.25, 'sql 100%', 4], [4, 1, 4.25, 'orm_v2', 4],
+      ])
+    })
+
+    it('takes the first row and the top n per parent', async () => {
+      const { db } = await seeded()
+      const rows = await db.queryable(User).orderBy((u) => u.id).select((u) => ({
+        name: u.name,
+        latest: u.posts.orderBy((p) => p.id.desc()).first((p) => ({ title: p.title })),
+        top: u.posts.orderBy((p) => p.amount.desc()).limit(1).toList((p) => ({ title: p.title })),
+      })).toList()
+      assert.deepEqual(rows, [
+        { name: 'alice', latest: { title: 'sql 100%' }, top: [{ title: 'sql 100%' }] },
+        { name: 'bob', latest: { title: 'hello' }, top: [{ title: 'hello' }] },
+        { name: 'carol', latest: null, top: [] },
+      ])
     })
   })
 }

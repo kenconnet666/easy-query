@@ -82,7 +82,7 @@ export abstract class Dialect {
 
   select(q: SelectNode, w: SqlWriter = new SqlWriter()): string {
     const cols = q.columns.length === 0 ? '1' : q.columns.map((c) => `${this.node(c.e, w)} AS ${this.quote(c.as)}`).join(', ')
-    let s = `SELECT ${q.distinct ? 'DISTINCT ' : ''}${cols} FROM ${this.table(q.from.table)} ${q.from.alias}`
+    let s = `SELECT ${q.distinct ? 'DISTINCT ' : ''}${cols} FROM ${q.from.sub ? `(${this.select(q.from.sub, w)})` : this.table(q.from.table)} ${q.from.alias}`
     for (const j of q.joins) s += ` LEFT JOIN ${this.table(j.table)} ${j.alias} ON ${this.node(j.on, w)}`
     if (q.where.length > 0) s += ` WHERE ${this.conjunction(q.where, w)}`
     if (q.groupBy.length > 0) s += ` GROUP BY ${q.groupBy.map((g) => this.node(g, w)).join(', ')}`
@@ -154,6 +154,13 @@ export abstract class Dialect {
         return `CASE${whens}${n.else ? ` ELSE ${this.node(n.else, w)}` : ''} END`
       }
       case 'exists': return `${n.not ? 'NOT ' : ''}EXISTS (${this.select(n.q, w)})`
+      case 'over': {
+        const parts: string[] = []
+        if (n.partition.length > 0) parts.push(`PARTITION BY ${n.partition.map((p) => this.node(p, w)).join(', ')}`)
+        if (n.order.length > 0) parts.push(`ORDER BY ${n.order.map((o) => this.node(o.e, w) + (o.desc ? ' DESC' : ' ASC')).join(', ')}`)
+        if (n.frame) parts.push(n.frame)
+        return `${this.node(n.fn, w)} OVER (${parts.join(' ')})`
+      }
       case 'sub': return `(${this.select(n.q, w)})`
     }
   }
