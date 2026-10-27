@@ -146,7 +146,9 @@ public class EasyClassUtil {
                     || clazz == BigDecimal.class || clazz == BigInteger.class || clazz == Boolean.class
                     || clazz == java.util.Date.class || clazz == java.sql.Date.class
                     || clazz == java.sql.Timestamp.class || clazz == java.time.LocalDateTime.class || clazz == java.sql.Time.class
-                    || clazz == java.time.LocalDate.class || clazz == java.time.LocalTime.class || clazz == java.util.UUID.class || clazz == java.lang.Object.class);
+                    || clazz == java.time.LocalDate.class || clazz == java.time.LocalTime.class || clazz == java.util.UUID.class || clazz == java.lang.Object.class
+                    // fork：带时区的时刻也是单值；否则 select(x -> x.instantColumn()) 会把 Instant 当实体去找无参构造器
+                    || clazz == java.time.Instant.class || clazz == java.time.OffsetDateTime.class || clazz == java.time.ZonedDateTime.class);
         } else {
             return false;
         }
