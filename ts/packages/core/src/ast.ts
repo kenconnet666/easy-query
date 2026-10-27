@@ -63,6 +63,13 @@ export interface InsertNode {
   readonly table: string
   readonly columns: readonly string[]
   readonly rows: readonly (readonly Node[])[]
+  readonly conflict: ConflictNode | undefined
+}
+
+/** upsert：target 列冲突时，update 为空表示忽略这一行，否则用新值更新这些列 */
+export interface ConflictNode {
+  readonly target: readonly string[]
+  readonly update: readonly string[]
 }
 
 export interface UpdateNode {

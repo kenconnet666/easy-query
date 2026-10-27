@@ -43,7 +43,8 @@ for (const url of urls) {
     const p = await pool()
     for (const statement of DDL) await p.query(statement)
     const statements: Statement[] = []
-    return { db: createDb({ schema, adapter: mysql(p), log: (s) => statements.push(s) }), statements }
+    const adapter = mysql(p)
+    return { db: createDb({ schema, adapter, log: (s) => statements.push(s) }), statements, adapter }
   }
 
   liveSuite(`mysql ${new URL(url).port}`, open)

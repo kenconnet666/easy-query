@@ -69,13 +69,13 @@ import { mysql } from '@eqts/mysql'          // 方言 + 驱动适配（mysql2 �
 
 const db = createDb({
   schema,
-  adapter: mysql(pool),                     // 方言 + 驱动；也有 sqlite(database)，pg()、hana() 在 T3
+  adapter: mysql(pool),                     // 方言 + 驱动；也有 sqlite(database)、postgres(pool)，hana() 在 T3
   log: s => console.log(s.sql, s.params),
-  // interceptors: [tenant(() => currentTenantId()), touch('updatedAt')],   T3
+  interceptors: [tenant('tenantId', () => currentTenantId()), touch('updatedAt')],
 })
 ```
 
-拦截器（T3）对应 easy-query 的谓词拦截与写入拦截：查询时给有租户列的表加条件，插入/更新时补值；单条查询可 `.noInterceptor('tenant')`。
+拦截器对应 easy-query 的谓词拦截与写入拦截：`filter` 给读、改、删加条件（主表、多对一 JOIN 的 ON、一对多子查询、toList 的第二条查询都加；更新删除的"无条件保护"不把它算作条件），`beforeInsert` / `beforeUpdate` 补值。内置 `tenant(prop, value)`、`touch(prop, now)`；单条查询 `.noInterceptor('tenant')`。租户列在实体上写 `.defaulted()`，插入时就可以不给。
 
 ## 3. 查询
 
@@ -124,7 +124,8 @@ const id = await db.insert(User).values({ name: 'a', companyId: null, attrs: { t
 await db.insert(User).values(rows).execute()                         // 批量；设置的列不同的行分成几条语句
 const n = await db.update(User).set(u => ({ name: 'b', age: u.age.plus(1) })).where(u => u.id.eq(id)).execute()
 await db.delete(User).where(u => u.id.eq(id)).execute()              // 无 where 的删除要显式 .all()
-// T3：upsert db.insert(User).values(row).onConflict(u => u.id).merge(u => [u.name])；按主键整行更新 db.update(User).entity(row)
+await db.insert(User).values(row).onConflict(u => u.id).merge(u => [u.name]).execute()   // upsert；merge() 不传为全部非冲突列，.ignore() 为跳过
+// T3：按主键整行更新 db.update(User).entity(row)
 ```
 
 条件全被跳过（`id && u.id.eq(id)` 而 id 为空）也算没有条件，同样拒绝执行。更新与删除里不允许多对一导航（要 JOIN，各库写法不一），一对多的 `any()` 可以。

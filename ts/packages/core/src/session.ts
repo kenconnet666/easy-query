@@ -3,6 +3,7 @@
  */
 import type { AnySchema } from './relations.ts'
 import type { Dialect, Statement } from './dialect.ts'
+import type { Interceptors } from './interceptor.ts'
 
 export interface ExecuteResult {
   readonly affected: number
@@ -39,6 +40,7 @@ export interface Context {
   readonly dialect: Dialect
   readonly session: Session
   readonly log: ((statement: Statement) => void) | undefined
+  readonly interceptors: Interceptors
 }
 
 export async function query(ctx: Context, statement: Statement): Promise<Record<string, unknown>[]> {

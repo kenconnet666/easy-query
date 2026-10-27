@@ -7,6 +7,7 @@
  * ```
  */
 import type { Statement } from './dialect.ts'
+import { Interceptors, type Interceptor } from './interceptor.ts'
 import { Deletable, Insertable, Updatable } from './mutation.ts'
 import { newQueryable, type Queryable } from './query.ts'
 import type { AnySchema, EntityKey } from './relations.ts'
@@ -23,6 +24,8 @@ export interface DbOptions<S extends AnySchema> {
   readonly adapter: Adapter
   /** 每条语句执行前调用 */
   readonly log?: (statement: Statement) => void
+  /** 谓词与写入拦截器，见 tenant()、touch() */
+  readonly interceptors?: readonly Interceptor[]
 }
 
 export class Db<S extends AnySchema> {
@@ -70,6 +73,9 @@ export class Db<S extends AnySchema> {
 export function createDb<S extends AnySchema>(options: DbOptions<S>): Db<S> {
   const keys = new Map<Entity, string>()
   for (const [key, entity] of Object.entries(options.schema.entities)) keys.set(entity, key)
-  const ctx: Context = { schema: options.schema, dialect: options.adapter.dialect, session: options.adapter.driver, log: options.log }
+  const ctx: Context = {
+    schema: options.schema, dialect: options.adapter.dialect, session: options.adapter.driver, log: options.log,
+    interceptors: new Interceptors(options.interceptors ?? []),
+  }
   return new Db(ctx, options.adapter, keys, false)
 }

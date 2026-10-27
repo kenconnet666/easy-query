@@ -38,12 +38,15 @@ export class Scope {
   readonly schema: AnySchema
   readonly joins: Join[] = []
   readonly allowJoins: boolean
+  /** 拦截器给每个表引用附加的条件（主表、JOIN、子查询都用） */
+  readonly filters: (ref: AnyRef) => Node[]
   private readonly counter: { n: number }
 
-  constructor(schema: AnySchema, counter: { n: number } = { n: 0 }, allowJoins = true) {
+  constructor(schema: AnySchema, counter: { n: number } = { n: 0 }, allowJoins = true, filters: (ref: AnyRef) => Node[] = () => []) {
     this.schema = schema
     this.counter = counter
     this.allowJoins = allowJoins
+    this.filters = filters
   }
 
   nextAlias(): string {
@@ -52,7 +55,7 @@ export class Scope {
 
   /** 子查询用的现场：别名不与外层重复 */
   child(): Scope {
-    return new Scope(this.schema, this.counter)
+    return new Scope(this.schema, this.counter, true, this.filters)
   }
 
   /** 实体的根引用 */
@@ -86,12 +89,12 @@ function joinOne(scope: Scope, parent: AnyRef, prop: string, rel: One, parentNul
   }
   const target = scope.schema.entities[rel.target]!
   const alias = scope.nextAlias()
-  scope.joins.push({
-    table: target.table,
-    alias,
-    on: { k: 'op', op: '=', l: { k: 'col', alias, name: target.columnNames[rel.to]! }, r: columnNode(scope, info, rel.from) },
-  })
-  return makeRef(scope, rel.target, alias, parentNullable || rel.nullable)
+  const ref = makeRef(scope, rel.target, alias, parentNullable || rel.nullable)
+  const on: Node = { k: 'op', op: '=', l: { k: 'col', alias, name: target.columnNames[rel.to]! }, r: columnNode(scope, info, rel.from) }
+  // 拦截器的条件放进 ON：LEFT JOIN 不会因此把主表的行过滤掉
+  const extra = scope.filters(ref)
+  scope.joins.push({ table: target.table, alias, on: extra.length === 0 ? on : { k: 'and', items: [on, ...extra] } })
+  return ref
 }
 
 export function columnNode(scope: Scope, info: RefInfo, prop: string): Node {
@@ -172,6 +175,7 @@ export class ManyRef<S extends AnySchema, K extends EntityKey<S>> {
     const root = scope.root(this.relation.target)
     const alias = root[REF].alias
     const where: Node[] = [{ k: 'op', op: '=', l: { k: 'col', alias, name: target.columnNames[this.relation.to]! }, r: columnNode(scope, this.parent[REF], this.relation.from) }]
+    where.push(...scope.filters(root))
     for (const f of filter ? [...this.filters, filter] : this.filters) {
       const n = condNode(f(root))
       if (n) where.push(n)

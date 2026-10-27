@@ -8,6 +8,7 @@ import { aggregate, aggregateCodec, codecs, condNode, Expr, orderNodes, type Con
 import { columnNode, ListOf, REF, Scope, type AnyRef, type Ref, type Selected } from './ref.ts'
 import type { AnySchema, EntityKey } from './relations.ts'
 import type { Codec, Row } from './schema.ts'
+import { refEntity } from './interceptor.ts'
 import { query, type Context } from './session.ts'
 
 type Fn<A, R> = (a: A) => R
@@ -26,6 +27,8 @@ interface State {
   readonly offset: number | undefined
   readonly distinct: boolean
   readonly forUpdate: boolean
+  /** noInterceptor 关掉的拦截器 */
+  readonly disabled: readonly string[]
 }
 
 export interface Page<T> {
@@ -146,6 +149,11 @@ export class Queryable<S extends AnySchema, K extends EntityKey<S>, Out = Row<S[
     return this.with({ forUpdate: true })
   }
 
+  /** 这条查询不用这些拦截器（按 name，如 'tenant'） */
+  noInterceptor(...names: string[]): Queryable<S, K, Out> {
+    return this.with({ disabled: [...this.state.disabled, ...names] })
+  }
+
   /** 分组；不调 select 时结果就是分组键 */
   groupBy<G extends Record<string, Expr<any>>>(keys: (r: Ref<S, K>) => G): GroupedQueryable<S, K, G, Selected<G>> {
     return new GroupedQueryable(this.ctx, { ...this.state, group: keys as never })
@@ -185,7 +193,7 @@ export class GroupedQueryable<S extends AnySchema, K extends EntityKey<S>, G, Ou
 export function newQueryable<S extends AnySchema, K extends EntityKey<S>>(ctx: Context, key: K): Queryable<S, K> {
   return new Queryable(ctx, {
     key, where: [], orderBy: [], select: undefined, group: undefined, having: [], groupOrderBy: [], groupSelect: undefined,
-    limit: undefined, offset: undefined, distinct: false, forUpdate: false,
+    limit: undefined, offset: undefined, distinct: false, forUpdate: false, disabled: [],
   })
 }
 
@@ -205,9 +213,10 @@ interface Built {
 
 /** 在新的构建现场里求值所有 lambda；bare 为 true 时不求值 select（count / any 用） */
 function build(ctx: Context, state: State, bare = false): Built {
-  const scope = new Scope(ctx.schema)
+  const interceptors = ctx.interceptors.without(state.disabled)
+  const scope = new Scope(ctx.schema, { n: 0 }, true, (ref) => interceptors.filters(ref, refEntity(ref)))
   const root = scope.root(state.key)
-  const where = conds(state.where.map((f) => f(root)))
+  const where = [...conds(state.where.map((f) => f(root))), ...scope.filters(root)]
   const shape = new ShapeCompiler(ctx)
   let groupBy: Node[] = []
   let having: Node[] = []
@@ -369,6 +378,7 @@ async function fillLists(ctx: Context, lists: readonly PendingList[]): Promise<v
     const scope = many.scope.child()
     const root = scope.root(many.relation.target)
     const { where, orderBy } = many.rebuild(root)
+    where.push(...scope.filters(root))
     const shape = new ShapeCompiler(ctx)
     shape.compile(pending.list.shape ? pending.list.shape(root) : root)
     const toNode = columnNode(scope, root[REF], many.relation.to)

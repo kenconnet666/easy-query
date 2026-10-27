@@ -16,5 +16,6 @@ export async function memoryDb(): Promise<TestEnv> {
   const database = new DatabaseSync(':memory:')
   database.exec(DDL)
   const statements: Statement[] = []
-  return { db: createDb({ schema, adapter: sqlite(database), log: (s) => statements.push(s) }), statements }
+  const adapter = sqlite(database)
+  return { db: createDb({ schema, adapter, log: (s) => statements.push(s) }), statements, adapter }
 }

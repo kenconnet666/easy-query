@@ -1,7 +1,7 @@
 /**
  * 各方言共用的测试实体与种子数据。建表语句各方言自己写（类型不同），列名一致。
  */
-import { col, defineSchema, entity, type Db, type Statement } from '../src/index.ts'
+import { col, defineSchema, entity, type Adapter, type Db, type Statement } from '../src/index.ts'
 
 export const Company = entity('t_company', {
   id: col.bigint().primaryKey().generated(),
@@ -49,6 +49,8 @@ export type TestDb = Db<typeof schema>
 export interface TestEnv {
   readonly db: TestDb
   readonly statements: Statement[]
+  /** 同一个连接，用来另建带拦截器的 db */
+  readonly adapter: Adapter
 }
 
 /** 两家公司、三个用户（一个无公司）、四篇帖子、两条评论；返回后清空语句记录 */

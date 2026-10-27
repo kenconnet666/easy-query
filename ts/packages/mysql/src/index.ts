@@ -8,7 +8,7 @@
  * TIMESTAMP 列会按会话时区换算，建议连接池设 `timezone: 'Z'` 并让会话时区为 +00:00。
  */
 import type { Pool, PoolConnection, ResultSetHeader } from 'mysql2/promise'
-import { Dialect, type Adapter, type Driver, type ExecuteResult, type Session, type TransactionOptions } from '@eqts/core'
+import { Dialect, type Adapter, type ConflictNode, type Driver, type ExecuteResult, type Session, type TransactionOptions } from '@eqts/core'
 
 /** MySQL 要求 OFFSET 前必须有 LIMIT；没给 LIMIT 时用最大值 */
 const NO_LIMIT = '18446744073709551615'
@@ -23,6 +23,17 @@ export class MySqlDialect extends Dialect {
   /** MySQL 的 LIKE 默认转义符就是反斜杠 */
   override likeEscape(): string {
     return ''
+  }
+
+  /**
+   * MySQL 按表上的主键 / 唯一键判断冲突；用 VALUES(col) 取新值（8.0.19 起的 AS 别名写法 8.0.18 不认）。
+   * ignore 写成对 target 的空更新，而不是 INSERT IGNORE（后者会吞掉其它错误）。
+   */
+  override onConflict(c: ConflictNode): string {
+    const update = c.update.length === 0
+      ? c.target.map((t) => `${this.quote(t)} = ${this.quote(t)}`)
+      : c.update.map((u) => `${this.quote(u)} = VALUES(${this.quote(u)})`)
+    return ` ON DUPLICATE KEY UPDATE ${update.join(', ')}`
   }
 
   override limitOffset(limit: number | undefined, offset: number | undefined): string {
