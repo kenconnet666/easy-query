@@ -42,6 +42,8 @@
         <module>sql-db-support/sql-db2</module>
         <module>sql-db-support/sql-duckdb</module>
         <module>sql-db-support/sql-tsdb</module>
+        <!-- fork：SAP HANA 方言 -->
+        <module>sql-db-support/sql-hana</module>
         <module>sql-processor</module>
         <module>sql-ksp-processor</module>
         <!--        以下是不需要deploy到远程仓库的-->

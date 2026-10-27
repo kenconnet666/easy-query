@@ -47,6 +47,17 @@ public final class LiveDatabases {
             }
         }
 
+        /** 同上，但忽略错误（如 HANA 没有 IF EXISTS：DROP 不存在的表会报错） */
+        public void executeIgnoring(String... sql) {
+            for (String one : sql) {
+                try (Connection c = dataSource.getConnection(); Statement s = c.createStatement()) {
+                    s.execute(one);
+                } catch (SQLException ignored) {
+                    // 见方法说明
+                }
+            }
+        }
+
         @Override
         public String toString() { return name; }
     }
@@ -73,6 +84,44 @@ public final class LiveDatabases {
         ds.setUser("postgres");
         ds.setPassword("postgres");
         return new Live("pg-17", new PgSQLDatabaseConfiguration(), ds);
+    }
+
+    /**
+     * SAP HANA 2.00.088（39041，租户 HXE），schema EQ_FORK。密码取系统属性 {@code eq.live.hana.password}，
+     * 没有时读仓库根目录 {@code .local/db.env} 的 {@code EQ_HANA_PASSWORD}（infra/dev/db.sh 生成）。
+     */
+    public static Live hana() {
+        String password = System.getProperty("eq.live.hana.password", envFile("EQ_HANA_PASSWORD"));
+        try {
+            Class<?> type = Class.forName("com.sap.db.jdbcext.DataSourceSAP");
+            DataSource admin = hanaDataSource(type, password, null);
+            new Live("hana-admin", new com.easy.query.hana.config.HanaDatabaseConfiguration(), admin).executeIgnoring(
+                "CREATE SCHEMA EQ_FORK");
+            return new Live("hana-2.0", new com.easy.query.hana.config.HanaDatabaseConfiguration(), hanaDataSource(type, password, "EQ_FORK"));
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("HANA JDBC driver (ngdbc) is not on the test classpath", e);
+        }
+    }
+
+    private static DataSource hanaDataSource(Class<?> type, String password, String schema) throws ReflectiveOperationException {
+        Object ds = type.getConstructor().newInstance();
+        type.getMethod("setUrl", String.class).invoke(ds, "jdbc:sap://" + HOST + ":39041/" + (schema == null ? "" : "?currentschema=" + schema));
+        type.getMethod("setUser", String.class).invoke(ds, "SYSTEM");
+        type.getMethod("setPassword", String.class).invoke(ds, password);
+        return (DataSource) ds;
+    }
+
+    /** 仓库根目录 .local/db.env 里的一项（测试的工作目录是 sql-fork-test） */
+    private static String envFile(String key) {
+        java.nio.file.Path file = java.nio.file.Paths.get("..", ".local", "db.env");
+        try {
+            for (String line : java.nio.file.Files.readAllLines(file)) {
+                if (line.startsWith(key + "=")) return line.substring(key.length() + 1).trim();
+            }
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("cannot read " + file.toAbsolutePath() + "; start infra/dev first", e);
+        }
+        throw new IllegalStateException(key + " not found in " + file.toAbsolutePath());
     }
 
     private static Live mysql(String name, int port) {

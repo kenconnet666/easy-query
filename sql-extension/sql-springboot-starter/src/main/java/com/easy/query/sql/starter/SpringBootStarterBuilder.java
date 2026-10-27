@@ -34,6 +34,7 @@ import com.easy.query.core.datasource.DataSourceUnitFactory;
 import com.easy.query.dameng.config.DamengDatabaseConfiguration;
 import com.easy.query.db2.config.DB2DatabaseConfiguration;
 import com.easy.query.duckdb.config.DuckDBSQLDatabaseConfiguration;
+import com.easy.query.hana.config.HanaDatabaseConfiguration;
 import com.easy.query.gauss.db.config.GaussDBDatabaseConfiguration;
 import com.easy.query.h2.config.H2DatabaseConfiguration;
 import com.easy.query.kingbase.es.config.KingbaseESDatabaseConfiguration;
@@ -207,6 +208,9 @@ public class SpringBootStarterBuilder {
                             break;
                         case DUCKDB:
                             new DuckDBSQLDatabaseConfiguration().configure(s);
+                            break;
+                        case HANA:
+                            new HanaDatabaseConfiguration().configure(s);
                             break;
                         case SQL92:
                             new DefaultDatabaseConfiguration().configure(s);
