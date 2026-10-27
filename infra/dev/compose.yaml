@@ -56,6 +56,48 @@ services:
       timeout: 3s
       retries: 20
 
+  # 上游 sql-test 的 BaseTest 在静态初始化里连 127.0.0.1:55000（密码 redispw）并清缓存键；没有它，继承 BaseTest 的类全部初始化失败
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    mem_limit: 256m
+    command: [redis-server, --requirepass, redispw, --save, "", --appendonly, "no"]
+    ports:
+      - "55000:6379"
+    healthcheck:
+      test: [CMD, redis-cli, -a, redispw, ping]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # 生产 PolarDB MySQL 版报告的内核是 8.0.18（8.0.18-X-Cluster-1.0.4），语法与函数是否可用按内核版本走，
+  # 所以用官方 mysql:8.0.18 当兼容基线：MySQL 方言与 flow 在这里验证不用到 8.0.19+ 的写法。
+  # （开源 PolarDB-X 引擎 2.0 的 "80-8.0.18" 镜像实际报告 8.0.30，不能当基线。）
+  polardb:
+    profiles: [polardb]
+    image: mysql:8.0.18@sha256:e1b0fd480a11e5c37425a2591b6fbd32af886bfc6d6f404bd362be5e50a2e632
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      MYSQL_ROOT_PASSWORD: ${EQ_POLARDB_PASSWORD:?run infra/dev/db.sh to create .local/db.env}
+      MYSQL_DATABASE: easy-query-test
+      TZ: Asia/Shanghai
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --lower-case-table-names=1
+      - --max-connections=200
+    ports:
+      - "3318:3306"
+    volumes:
+      - polardb-data:/var/lib/mysql
+    healthcheck:
+      test: [CMD-SHELL, 'MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysql --protocol=TCP -h 127.0.0.1 -u root -e "SELECT 1" >/dev/null']
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 20s
+
   hana:
     profiles: [hana]
     build: ./hana
@@ -98,4 +140,5 @@ services:
 volumes:
   mysql-data:
   postgres-data:
+  polardb-data:
   hana-data:

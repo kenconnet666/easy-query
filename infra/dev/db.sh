@@ -15,6 +15,7 @@ if [[ ! -f $env_file ]]; then
   cat >"$env_file" <<EOF
 EQ_MYSQL_ROOT_PASSWORD=root
 EQ_PG_PASSWORD=postgres
+EQ_POLARDB_PASSWORD=root
 EQ_HANA_PASSWORD=$hana_password
 EOF
   cat >"$local_dir/connections.md" <<EOF
@@ -25,10 +26,12 @@ EOF
 | MySQL 8.4 | jdbc:mysql://127.0.0.1:3306/easy-query-test?serverTimezone=GMT%2B8&characterEncoding=utf-8&useSSL=false&allowMultiQueries=true&rewriteBatchedStatements=true | root | root |
 | MySQL 8.4（同一实例，上游 3316 用例） | jdbc:mysql://127.0.0.1:3316/easy-query-test?allowPublicKeyRetrieval=true&useSSL=false | root | root |
 | PostgreSQL 17 | jdbc:postgresql://127.0.0.1:54321/easy-query-test | postgres | postgres |
+| PolarDB 兼容基线（官方 MySQL 8.0.18） | jdbc:mysql://127.0.0.1:3318/easy-query-test?useSSL=false&serverTimezone=GMT%2B8 | root | root |
+| Redis 7.4（上游 BaseTest 用） | redis://127.0.0.1:55000/1 | - | redispw |
 | HANA 2.00.088 租户 HXE | jdbc:sap://127.0.0.1:39041 | SYSTEM | $hana_password |
 | HANA SYSTEMDB（仅管理） | jdbc:sap://127.0.0.1:39017 | SYSTEM | $hana_password |
 
-启停：bash infra/dev/db.sh up -d ｜ bash infra/dev/db.sh --profile hana up -d ｜ bash infra/dev/db.sh stop
+启停：bash infra/dev/db.sh up -d ｜ bash infra/dev/db.sh --profile hana up -d ｜ bash infra/dev/db.sh --profile polardb up -d ｜ bash infra/dev/db.sh stop
 EOF
   echo "created $env_file and $local_dir/connections.md"
 fi
