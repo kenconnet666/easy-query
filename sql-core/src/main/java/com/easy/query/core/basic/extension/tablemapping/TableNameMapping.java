@@ -41,6 +41,11 @@ public final class TableNameMapping {
         return EMPTY;
     }
 
+    /** 这个映射里 entityClass 对应的表名；没有映射时为 null（例：搬数据时取目标表，{@code InsertSelect…into(ARCHIVE.tableName(X.class))}） */
+    public String tableName(Class<?> entityClass) {
+        return tables.get(entityClass);
+    }
+
     /** 在这个映射下执行并返回结果 */
     public <T> T call(Supplier<T> work) {
         try (Scope ignored = open()) {
