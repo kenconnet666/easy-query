@@ -24,3 +24,8 @@
 - 用例之间共用表、互相改数据，稳定的回归要从空库重建后再跑。
 
 数字来自 2026-10-27 的第 4 次全量运行（双流水线约 9 分钟）。
+
+## 运行记录
+
+- **2026-10-28，M3b 收尾**（main 含 PR #12–#18）：与已知非通过清单对比，无回归。第一遍有 36 条"新失败"，全是 `t_sys_user` 缺 `username` / `id_card` / `address` 列：之前单独跑子集时 `doc.DocTest1` 按 `doc.entity.SysUser`（id、name、phone、age、create_time）自动同步了同名表。用 `mysql-init-sqk-easy.sql` 里的建表语句重建后重跑这 9 个类：425 过、1 个已知错误、无新增。
+  **注意**：单独跑含 `doc.DocTest1` 的子集后，要先恢复 `t_sys_user` 再跑全量。
