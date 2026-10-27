@@ -1,0 +1,29 @@
+import assert from 'node:assert/strict'
+import { describe, it } from 'node:test'
+import { createDb } from '@eqts/core'
+import { Company, Post, schema } from '../../core/test/fixture.ts'
+import { hana } from '../src/index.ts'
+
+describe('hana: SQL text', () => {
+  // 只渲染，不连库（连接池在第一次执行时才连）
+  const db = createDb({ schema, adapter: hana({ host: 'unused', port: 0, user: 'x', password: 'x' }) })
+
+  it('writes multi-row inserts as SELECT … FROM DUMMY UNION ALL', () => {
+    const [s] = db.insert(Post).values([{ userId: 1, title: 'a', amount: '1' }, { userId: 2, title: 'b', amount: '2' }]).toSQL()
+    assert.equal(s!.sql, 'INSERT INTO "t_post" ("user_id", "title", "amount") SELECT ? AS "user_id", ? AS "title", ? AS "amount" FROM DUMMY'
+      + ' UNION ALL SELECT ? AS "user_id", ? AS "title", ? AS "amount" FROM DUMMY')
+    assert.deepEqual(s!.params, ['1', 'a', '1', '2', 'b', '2'])
+  })
+
+  it('writes upserts as MERGE', () => {
+    const [merge] = db.insert(Company).values({ id: 1, name: 'x' }).onConflict((c) => c.id).merge().toSQL()
+    assert.equal(merge!.sql, 'MERGE INTO "t_company" eq_t USING (SELECT ? AS "id", ? AS "name" FROM DUMMY) eq_s ON (eq_t."id" = eq_s."id")'
+      + ' WHEN MATCHED THEN UPDATE SET eq_t."name" = eq_s."name" WHEN NOT MATCHED THEN INSERT ("id", "name") VALUES (eq_s."id", eq_s."name")')
+    const [ignore] = db.insert(Company).values({ id: 1, name: 'x' }).onConflict((c) => c.id).ignore().toSQL()
+    assert.ok(!ignore!.sql.includes('WHEN MATCHED'))
+  })
+
+  it('needs a LIMIT before OFFSET', () => {
+    assert.match(db.queryable(Post).offset(3).toSQL().sql, / LIMIT 2147483647 OFFSET 3$/)
+  })
+})

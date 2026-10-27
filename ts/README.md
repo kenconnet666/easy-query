@@ -29,13 +29,14 @@ const rows = await db.queryable(Company)
 | `@eqts/sqlite` | `node:sqlite`（Node 自带，测试零依赖） |
 | `@eqts/mysql` | `mysql2/promise` 连接池；MySQL 8.0.18（PolarDB）起 |
 | `@eqts/pg` | `pg`（node-postgres）连接池；PG 12+，自增主键用 RETURNING 取回 |
+| `@eqts/hana` | `hdb`（SAP 的纯 JS 驱动，免原生编译）+ 自带小连接池；HANA 2.0，upsert 写成 MERGE，多行插入写成 SELECT … FROM DUMMY UNION ALL |
 
 ## 开发
 
 ```bash
 pnpm install
 pnpm run typecheck     # tsc（含 50 实体类型样板与类型正负例）
-pnpm test              # node --test 直接跑 .ts；设 EQTS_MYSQL_URLS / EQTS_PG_URLS 时再跑 MySQL / PG 实库套件
+pnpm test              # node --test 直接跑 .ts；设 EQTS_MYSQL_URLS / EQTS_PG_URLS / EQTS_HANA_URL 时再跑对应的实库套件（HANA 不在 CI，本地跑）
 ```
 
 源码只用可擦除的 TS 语法（`erasableSyntaxOnly`），Node 不经编译直接运行。各方言共用的实库用例在 `packages/core/test/suite.ts`。

@@ -168,7 +168,7 @@ ts/
   packages/sqlite    node:sqlite（测试零基础设施）
   packages/mysql     mysql2；8.0.18 基线（PolarDB）
   packages/pg        pg
-  packages/hana      @sap/hana-client
+  packages/hana      hdb（SAP 的纯 JS 驱动；原计划的 @sap/hana-client 是原生扩展，Node 新版本常缺预编译包）
   test/              跨方言用例（SQL 文本快照 + 本地实库）
 ```
 
