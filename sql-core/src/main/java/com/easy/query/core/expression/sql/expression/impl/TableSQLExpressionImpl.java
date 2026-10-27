@@ -1,5 +1,6 @@
 package com.easy.query.core.expression.sql.expression.impl;
 
+import com.easy.query.core.basic.extension.tablemapping.TableNameMapping;
 import com.easy.query.core.basic.jdbc.parameter.ToSQLContext;
 import com.easy.query.core.configuration.dialect.SQLKeyword;
 import com.easy.query.core.context.QueryRuntimeContext;
@@ -108,7 +109,15 @@ public class TableSQLExpressionImpl implements EntityTableSQLExpression {
     public String getTableName() {
         SQLKeyword keyword = entityTable.getEntityMetadata().getSQLKeyword(sqlKeyword);
         String schema = runtimeContext.getRuntimeSchemaProvider().getSchema(entityTable.getEntityMetadata());
-        return EasyToSQLUtil.getSchemaTableName(keyword, schema, entityTable.getTableName(), schemaAs, tableNameAs);
+        // fork：作用域内的表名映射（TableNameMapping，热表/归档表等）；显式 asTable 与分表路由（都写在 tableNameAs 上）优先
+        String tableName = entityTable.getTableName();
+        if (tableNameAs == null) {
+            String mapped = TableNameMapping.currentTableName(entityTable.getEntityClass());
+            if (mapped != null) {
+                tableName = mapped;
+            }
+        }
+        return EasyToSQLUtil.getSchemaTableName(keyword, schema, tableName, schemaAs, tableNameAs);
     }
 
     @Override

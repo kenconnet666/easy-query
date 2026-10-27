@@ -43,7 +43,7 @@ M0 → M1 → M2 → M3a（flow 用得上的 3.1–3.2）→ M5（T0–T2）→ 
 ## M3 通用缺口（每项都有 MySQL 8.0.18 / PG 17 / HANA 支持矩阵，不支持的方言渲染时报错）
 
 M3a（flow 用得上，先做；验收 = 在 flow 本地分支改写对应代码）：
-- [ ] 3.1 查询级表名映射：一条查询里把实体 A、B… 映射到别的表，导航、隐式 join、隐式子查询、include 都跟随（现状：`asTable` 只改最近一张表，已用样板证实）。先在 decisions 里比较 `ExpressionBuilderFactory` 替换与拦截器两条路，再定 API。验收：flow 的 InboxQueries / Participation 去掉热表归档表分支
+- [x] 3.1 查询级表名映射（TableNameMapping，decisions/0003）：一条查询里把实体 A、B… 映射到别的表，导航、隐式 join、隐式子查询、include 都跟随（现状：`asTable` 只改最近一张表，已用样板证实）。先在 decisions 里比较 `ExpressionBuilderFactory` 替换与拦截器两条路，再定 API。验收：flow 的 InboxQueries / Participation 去掉热表归档表分支
 - [ ] 3.2 类型化 INSERT … SELECT（含插入到另一张同结构表）。验收：flow 的 Archives 去掉 information_schema 与拼接 SQL
 - [ ] 3.3 内置 JSON 列转换器 + JsonCodec SPI：按字段泛型类型（List<Foo>、Map<String,Object>）编解码，codec 可换（Jackson / 用户自带）。flow 收益很小（见 flow.md），验收用 sql-fork-test 的实体
 
