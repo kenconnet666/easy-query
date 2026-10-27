@@ -28,13 +28,14 @@ const rows = await db.queryable(Company)
 | `@eqts/core` | 实体、关系、表达式、语法树、方言基类、查询/写入构建器、结果拼装 |
 | `@eqts/sqlite` | `node:sqlite`（Node 自带，测试零依赖） |
 | `@eqts/mysql` | `mysql2/promise` 连接池；MySQL 8.0.18（PolarDB）起 |
+| `@eqts/pg` | `pg`（node-postgres）连接池；PG 12+，自增主键用 RETURNING 取回 |
 
 ## 开发
 
 ```bash
 pnpm install
 pnpm run typecheck     # tsc（含 50 实体类型样板与类型正负例）
-pnpm test              # node --test 直接跑 .ts；设 EQTS_MYSQL_URLS 时再跑 MySQL 实库套件
+pnpm test              # node --test 直接跑 .ts；设 EQTS_MYSQL_URLS / EQTS_PG_URLS 时再跑 MySQL / PG 实库套件
 ```
 
 源码只用可擦除的 TS 语法（`erasableSyntaxOnly`），Node 不经编译直接运行。各方言共用的实库用例在 `packages/core/test/suite.ts`。

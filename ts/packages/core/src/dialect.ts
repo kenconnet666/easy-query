@@ -41,6 +41,13 @@ export abstract class Dialect {
     }
   }
 
+  /** 单行插入后怎么拿自增主键：驱动直接返回（SQLite、MySQL），或 INSERT … RETURNING 主键（PG） */
+  readonly generatedKeys: 'driver' | 'returning' = 'driver'
+
+  returning(column: string): string {
+    return ` RETURNING ${this.quote(column)}`
+  }
+
   quote(identifier: string): string {
     return `"${identifier.replace(/"/g, '""')}"`
   }
@@ -112,7 +119,8 @@ export abstract class Dialect {
   node(n: Node, w: SqlWriter): string {
     switch (n.k) {
       case 'col': return `${n.alias}.${this.quote(n.name)}`
-      case 'param': return w.bind(this, n.value == null ? null : n.codec ? n.codec.encode(n.value) : this.encodeParam(n.value))
+      // 列编码之后再交给方言：例如布尔列编码后仍是布尔，由方言决定写 1 / 0 还是 true / false
+      case 'param': return w.bind(this, n.value == null ? null : this.encodeParam(n.codec ? n.codec.encode(n.value) : n.value))
       case 'lit': return n.sql
       case 'raw': return n.parts.reduce((s, part, i) => s + part + (i < n.args.length ? this.node(n.args[i]!, w) : ''), '')
       case 'op': return `${this.operand(n.l, w)} ${n.op} ${this.operand(n.r, w)}`
