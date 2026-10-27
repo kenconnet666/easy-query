@@ -1854,6 +1854,23 @@ public abstract class AbstractClientQueryable<T1> implements ClientQueryable<T1>
     @NotNull
     @Override
     public ClientQueryable<T1> forUpdate() {
+        return lock(QueryLockEnum.FOR_UPDATE);
+    }
+
+    @NotNull
+    @Override
+    public ClientQueryable<T1> forUpdateNoWait() {
+        return lock(QueryLockEnum.FOR_UPDATE_NOWAIT);
+    }
+
+    @NotNull
+    @Override
+    public ClientQueryable<T1> forUpdateSkipLocked() {
+        return lock(QueryLockEnum.FOR_UPDATE_SKIP_LOCKED);
+    }
+
+    /** fork：三种 FOR UPDATE 共用的检查（事务内、单表、只设置一次） */
+    private ClientQueryable<T1> lock(QueryLockEnum lock) {
         ConnectionManager connectionManager = runtimeContext.getConnectionManager();
         if (!connectionManager.currentThreadInTransaction()) {
             String queryName = EasyClassUtil.getSimpleName(queryClass());
@@ -1863,11 +1880,11 @@ public abstract class AbstractClientQueryable<T1> implements ClientQueryable<T1>
             String queryName = EasyClassUtil.getSimpleName(queryClass());
             throw new IllegalStateException("forUpdate currently supports single-table queries only, query [" + queryName + "] contains join/relation tables.");
         }
-        if (QueryLockEnum.FOR_UPDATE == entityQueryExpressionBuilder.getExpressionContext().getQueryLock()) {
+        if (QueryLockEnum.NONE != entityQueryExpressionBuilder.getExpressionContext().getQueryLock()) {
             String queryName = EasyClassUtil.getSimpleName(queryClass());
             throw new IllegalStateException("forUpdate is already enabled on query [" + queryName + "], repeated calls are not supported.");
         }
-        entityQueryExpressionBuilder.getExpressionContext().setQueryLock(QueryLockEnum.FOR_UPDATE);
+        entityQueryExpressionBuilder.getExpressionContext().setQueryLock(lock);
         return this;
     }
 

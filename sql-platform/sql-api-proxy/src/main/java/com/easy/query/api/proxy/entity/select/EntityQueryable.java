@@ -137,6 +137,18 @@ public interface EntityQueryable<T1Proxy extends ProxyEntity<T1Proxy, T1>, T1> e
         throw new UnsupportedOperationException();
     }
 
+    /** fork：FOR UPDATE NOWAIT，拿不到锁立即报错 */
+    @NotNull
+    default EntityQueryable<T1Proxy, T1> forUpdateNoWait() {
+        throw new UnsupportedOperationException();
+    }
+
+    /** fork：FOR UPDATE SKIP LOCKED，跳过别的事务锁住的行（多个消费者抢任务） */
+    @NotNull
+    default EntityQueryable<T1Proxy, T1> forUpdateSkipLocked() {
+        throw new UnsupportedOperationException();
+    }
+
     /**
      * 先limit再select select selectExpression(*) from (select * from table limit x,y) t
      * @param offset

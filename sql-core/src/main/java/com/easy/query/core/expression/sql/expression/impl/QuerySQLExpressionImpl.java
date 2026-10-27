@@ -237,20 +237,33 @@ public class QuerySQLExpressionImpl implements EntityQuerySQLExpression {
         if (!root) {
             return sql;
         }
-        if (entitySQLExpressionMetadata.getExpressionContext().getQueryLock() != QueryLockEnum.FOR_UPDATE) {
+        QueryLockEnum lock = entitySQLExpressionMetadata.getExpressionContext().getQueryLock();
+        if (lock == QueryLockEnum.NONE) {
             return sql;
         }
         ConnectionManager connectionManager = entitySQLExpressionMetadata.getRuntimeContext().getConnectionManager();
         if (!connectionManager.currentThreadInTransaction()) {
             throw new IllegalStateException("FOR UPDATE query requires an active transaction, please call beginTransaction() before executing this query.");
         }
-        String forUpdateSQL = sql + " FOR UPDATE";
+        String forUpdateSQL = sql + lockClause(lock);
         if (log.isDebugEnabled()) {
             Transaction transaction = connectionManager.getTransactionOrNull();
             String txId = transaction == null ? "env-tx" : String.valueOf(System.identityHashCode(transaction));
             log.debug("FOR UPDATE SQL[txId=" + txId + "]: " + forUpdateSQL);
         }
         return forUpdateSQL;
+    }
+
+    /**
+     * fork：行锁子句。MySQL 8、PG、Oracle 都是这三种写法；不同的方言（如 HANA 的 IGNORE LOCKED）覆盖这里
+     */
+    protected String lockClause(QueryLockEnum lock) {
+        switch (lock) {
+            case FOR_UPDATE: return " FOR UPDATE";
+            case FOR_UPDATE_NOWAIT: return " FOR UPDATE NOWAIT";
+            case FOR_UPDATE_SKIP_LOCKED: return " FOR UPDATE SKIP LOCKED";
+            default: throw new IllegalArgumentException("unknown lock " + lock);
+        }
     }
 
     protected void buildSQLTableOrJoin(StringBuilder sql, List<EntityTableSQLExpression> tables, ToSQLContext toSQLContext) {

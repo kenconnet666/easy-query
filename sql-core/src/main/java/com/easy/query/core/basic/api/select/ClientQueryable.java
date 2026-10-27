@@ -143,6 +143,22 @@ public interface ClientQueryable<T1> extends Query<T1>,
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * fork：与 {@link #forUpdate()} 相同，但拿不到锁时立即报错而不是等待（{@code FOR UPDATE NOWAIT}）
+     */
+    @NotNull
+    default ClientQueryable<T1> forUpdateNoWait() {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * fork：与 {@link #forUpdate()} 相同，但跳过已被别的事务锁住的行（{@code FOR UPDATE SKIP LOCKED}），常用于多个消费者抢任务
+     */
+    @NotNull
+    default ClientQueryable<T1> forUpdateSkipLocked() {
+        throw new UnsupportedOperationException();
+    }
+
     @NotNull ClientQueryable<T1> useShardingConfigure(int maxShardingQueryLimit, ConnectionModeEnum connectionMode);
 
     @NotNull ClientQueryable<T1> useMaxShardingQueryLimit(int maxShardingQueryLimit);

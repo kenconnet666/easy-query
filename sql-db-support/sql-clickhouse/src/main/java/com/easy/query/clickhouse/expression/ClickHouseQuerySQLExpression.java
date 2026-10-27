@@ -20,7 +20,8 @@ public class ClickHouseQuerySQLExpression extends QuerySQLExpressionImpl {
         if (!root) {
             return sql;
         }
-        if (entitySQLExpressionMetadata.getExpressionContext().getQueryLock() != QueryLockEnum.FOR_UPDATE) {
+        // fork：NOWAIT / SKIP LOCKED 同样不支持，不能悄悄忽略
+        if (entitySQLExpressionMetadata.getExpressionContext().getQueryLock() == QueryLockEnum.NONE) {
             return sql;
         }
         throw new UnsupportedOperationException("ClickHouse does not support FOR UPDATE row-level locking. " +

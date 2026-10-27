@@ -2,6 +2,7 @@ package com.easy.query.hana.expression;
 
 import com.easy.query.core.basic.jdbc.parameter.DefaultToSQLContext;
 import com.easy.query.core.basic.jdbc.parameter.ToSQLContext;
+import com.easy.query.core.enums.QueryLockEnum;
 import com.easy.query.core.expression.sql.expression.impl.EntitySQLExpressionMetadata;
 import com.easy.query.core.expression.sql.expression.impl.QuerySQLExpressionImpl;
 
@@ -38,5 +39,11 @@ public class HanaQuerySQLExpression extends QuerySQLExpressionImpl {
         // 用一次性的上下文渲染投影，免得把投影里的参数重复加进真正的上下文
         ToSQLContext scratch = new DefaultToSQLContext(entitySQLExpressionMetadata.getExpressionContext().getTableContext());
         return "1".equals(this.projects.toSQL(scratch).trim());
+    }
+
+    /** fork：HANA 跳过锁定行写作 IGNORE LOCKED（2.0 SPS03 起）；NOWAIT 与标准相同 */
+    @Override
+    protected String lockClause(QueryLockEnum lock) {
+        return lock == QueryLockEnum.FOR_UPDATE_SKIP_LOCKED ? " FOR UPDATE IGNORE LOCKED" : super.lockClause(lock);
     }
 }
