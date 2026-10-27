@@ -2,6 +2,7 @@ package com.easy.query.core.func;
 
 import org.jetbrains.annotations.NotNull;
 import com.easy.query.core.enums.SQLLikeEnum;
+import com.easy.query.core.exception.EasyQueryInvalidOperationException;
 import com.easy.query.core.expression.lambda.SQLActionExpression1;
 import com.easy.query.core.expression.parser.core.SQLTableOwner;
 import com.easy.query.core.expression.parser.core.available.TableAvailable;
@@ -19,17 +20,14 @@ import com.easy.query.core.func.def.enums.NumberCalcEnum;
 import com.easy.query.core.func.def.enums.OrderByModeEnum;
 import com.easy.query.core.func.def.enums.TimeUnitEnum;
 import com.easy.query.core.func.def.impl.AbsSQLFunction;
-import com.easy.query.core.func.def.impl.AvgOverSQLFunction;
 import com.easy.query.core.func.def.impl.AvgSQLFunction;
 import com.easy.query.core.func.def.impl.BankSQLFunction;
 import com.easy.query.core.func.def.impl.BooleanConstantSQLFunction;
 import com.easy.query.core.func.def.impl.CastSQLFunction;
 import com.easy.query.core.func.def.impl.ConcatSQLFunction;
 import com.easy.query.core.func.def.impl.ConstSQLFunction;
-import com.easy.query.core.func.def.impl.CountOverSQLFunction;
 import com.easy.query.core.func.def.impl.CountSQLFunction;
 import com.easy.query.core.func.def.impl.DateTimeDuration2SQLFunction;
-import com.easy.query.core.func.def.impl.DenseRankOverSQLFunction;
 import com.easy.query.core.func.def.impl.DateTime2PlusSQLFunction;
 import com.easy.query.core.func.def.impl.DateTimeDurationSQLFunction;
 import com.easy.query.core.func.def.impl.DateTimeFormatSQLFunction;
@@ -53,9 +51,7 @@ import com.easy.query.core.func.def.impl.LengthSQLFunction;
 import com.easy.query.core.func.def.impl.LikeSQLFunction;
 import com.easy.query.core.func.def.impl.MathSQLFunction;
 import com.easy.query.core.func.def.impl.MaxMinColumnsSQLFunction;
-import com.easy.query.core.func.def.impl.MaxOverSQLFunction;
 import com.easy.query.core.func.def.impl.MaxSQLFunction;
-import com.easy.query.core.func.def.impl.MinOverSQLFunction;
 import com.easy.query.core.func.def.impl.MinSQLFunction;
 import com.easy.query.core.func.def.impl.NotBankSQLFunction;
 import com.easy.query.core.func.def.impl.NotEmptySQLFunction;
@@ -63,18 +59,16 @@ import com.easy.query.core.func.def.impl.NotSQLFunction;
 import com.easy.query.core.func.def.impl.NowSQLFunction;
 import com.easy.query.core.func.def.impl.NullDefaultSQLFunction;
 import com.easy.query.core.func.def.impl.NumberCalcSQLFunction;
+import com.easy.query.core.func.def.impl.OverSQLFunction;
 import com.easy.query.core.func.def.impl.OrderByNullsModeSQLFunction;
 import com.easy.query.core.func.def.impl.RandomSQLFunction;
-import com.easy.query.core.func.def.impl.RankOverSQLFunction;
 import com.easy.query.core.func.def.impl.ReplaceSQLFunction;
 import com.easy.query.core.func.def.impl.RightPadSQLFunction;
 import com.easy.query.core.func.def.impl.RoundSQLFunction;
-import com.easy.query.core.func.def.impl.RowNumberOverSQLFunction;
 import com.easy.query.core.func.def.impl.StringCompareToSQLFunction;
 import com.easy.query.core.func.def.impl.SubQueryExistsSQLFunction;
 import com.easy.query.core.func.def.impl.SubQuerySQLFunction;
 import com.easy.query.core.func.def.impl.SubStringSQLFunction;
-import com.easy.query.core.func.def.impl.SumOverSQLFunction;
 import com.easy.query.core.func.def.impl.SumSQLFunction;
 import com.easy.query.core.func.def.impl.ToLowerSQLFunction;
 import com.easy.query.core.func.def.impl.ToUpperSQLFunction;
@@ -368,42 +362,60 @@ public class SQLFuncImpl implements SQLFunc {
 
     @Override
     public PartitionBySQLFunction rowNumberOver(SQLActionExpression1<ColumnFuncSelector> sqlExpression) {
-        return new RowNumberOverSQLFunction(getColumnExpressions(sqlExpression));
+        return new OverSQLFunction("ROW_NUMBER()", 0, getColumnExpressions(sqlExpression));
     }
 
     @Override
     public PartitionBySQLFunction rankNumberOver(SQLActionExpression1<ColumnFuncSelector> sqlExpression) {
-        return new RankOverSQLFunction(getColumnExpressions(sqlExpression));
+        return new OverSQLFunction("RANK()", 0, getColumnExpressions(sqlExpression));
     }
 
     @Override
     public PartitionBySQLFunction denseRankNumberOver(SQLActionExpression1<ColumnFuncSelector> sqlExpression) {
-        return new DenseRankOverSQLFunction(getColumnExpressions(sqlExpression));
+        return new OverSQLFunction("DENSE_RANK()", 0, getColumnExpressions(sqlExpression));
     }
 
     @Override
     public PartitionBySQLFunction countOver(SQLActionExpression1<ColumnFuncSelector> sqlExpression) {
-        return new CountOverSQLFunction(getColumnExpressions(sqlExpression));
+        return new OverSQLFunction("COUNT({0})", 1, getColumnExpressions(sqlExpression));
     }
 
     @Override
     public PartitionBySQLFunction sumOver(SQLActionExpression1<ColumnFuncSelector> sqlExpression) {
-        return new SumOverSQLFunction(getColumnExpressions(sqlExpression));
+        return new OverSQLFunction("SUM({0})", 1, getColumnExpressions(sqlExpression));
     }
 
     @Override
     public PartitionBySQLFunction avgOver(SQLActionExpression1<ColumnFuncSelector> sqlExpression) {
-        return new AvgOverSQLFunction(getColumnExpressions(sqlExpression));
+        return new OverSQLFunction("AVG({0})", 1, getColumnExpressions(sqlExpression));
     }
 
     @Override
     public PartitionBySQLFunction maxOver(SQLActionExpression1<ColumnFuncSelector> sqlExpression) {
-        return new MaxOverSQLFunction(getColumnExpressions(sqlExpression));
+        return new OverSQLFunction("MAX({0})", 1, getColumnExpressions(sqlExpression));
     }
 
     @Override
     public PartitionBySQLFunction minOver(SQLActionExpression1<ColumnFuncSelector> sqlExpression) {
-        return new MinOverSQLFunction(getColumnExpressions(sqlExpression));
+        return new OverSQLFunction("MIN({0})", 1, getColumnExpressions(sqlExpression));
+    }
+
+    @Override
+    public PartitionBySQLFunction ntileOver(int buckets, SQLActionExpression1<ColumnFuncSelector> sqlExpression) {
+        if (buckets <= 0) {
+            throw new EasyQueryInvalidOperationException("ntile buckets must be > 0, got " + buckets);
+        }
+        return new OverSQLFunction("NTILE(" + buckets + ")", 0, getColumnExpressions(sqlExpression));
+    }
+
+    @Override
+    public PartitionBySQLFunction percentRankOver(SQLActionExpression1<ColumnFuncSelector> sqlExpression) {
+        return new OverSQLFunction("PERCENT_RANK()", 0, getColumnExpressions(sqlExpression));
+    }
+
+    @Override
+    public PartitionBySQLFunction cumeDistOver(SQLActionExpression1<ColumnFuncSelector> sqlExpression) {
+        return new OverSQLFunction("CUME_DIST()", 0, getColumnExpressions(sqlExpression));
     }
 
     @Override
