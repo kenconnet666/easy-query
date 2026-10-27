@@ -1,3 +1,4 @@
 com.easy.query.sql.starter.EasyQueryStarterAutoConfiguration
 com.easy.query.sql.starter.EasyQueryStarterBuildAutoConfiguration
 com.easy.query.sql.starter.EasyQueryTrackAopConfiguration
+com.easy.query.sql.starter.json.EasyQueryJsonAutoConfiguration
