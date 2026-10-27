@@ -9,3 +9,5 @@
 - [M2] HANA 按顺序取第一个的关联标量子查询（ORDER BY … LIMIT 1）：HANA 不支持，可评估改写成窗口函数 + 派生表
 - [M2] HANA 的 length / indexOf / subString 按 UTF-16 单元计；要与 MySQL 的按字符计数一致可用 OCCURRENCES_REGEXPR 改写（代价高，先不做）
 - [M2] HANA JSON 数组长度：没有内置函数，easy_query_pro 的做法是部署一个 SQLScript 函数
+- [M2] 核心的 LocalDateTimeTypeHandler 经 Timestamp.valueOf 按 JVM 时区换算：JVM 时区有夏令时时，跳过那一小时里的时刻会被挪动（所有方言都受影响，HANA 已改用 UTC 日历）；可做成回馈上游的修复
+- [M2] HANA 迁移 DDL（2.6）挪到 M3a 之后：flow 用 Flyway 脚本，ERP 是库优先，目前没人等它
