@@ -16,6 +16,7 @@ import com.easy.query.core.proxy.extension.functions.type.JSONObjectTypeExpressi
 import com.easy.query.core.proxy.extension.functions.type.NumberTypeExpression;
 import com.easy.query.core.proxy.extension.functions.type.StringTypeExpression;
 import com.easy.query.core.proxy.extension.functions.type.impl.AnyTypeExpressionImpl;
+import com.easy.query.core.proxy.extension.functions.type.impl.NumberTypeExpressionImpl;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -89,5 +90,16 @@ public interface ColumnJSONArrayFunctionAvailable<TProperty> extends ColumnObjec
         return getJSONElement(index).asJSONArray();
     }
 
+    /**
+     * fork：数组的元素个数（MySQL JSON_LENGTH、PG jsonb_array_length 等，各方言 SQLFunc 早已实现，之前代理 API 没有入口）。
+     * 叫 size 而不是 length：length() 在字符串与任意类型的列上是文字长度
+     *
+     * @return 元素个数
+     */
+    default NumberTypeExpression<Integer> size() {
+        return new NumberTypeExpressionImpl<>(this.getCurrentEntitySQLContext(), this.getTable(), null, fx -> {
+            return fx.jsonArrayLength(s -> PropTypeColumn.columnFuncSelector(s, this));
+        }, Integer.class);
+    }
 
 }

@@ -125,6 +125,8 @@ public interface ColumnObjectFunctionAvailable<TProperty, TChain> extends SQLSel
                     for (int i1 = 0; i1 < partitions.size() - 1; i1++) {
                         nextSQL.append(",{").append(i++).append("}");
                     }
+                    // fork：PARTITION BY 与 ORDER BY 之间要有空格；原来靠标识符引号才合法，不加引号的方言会把两者连成一个词
+                    nextSQL.append(" ");
                 }
                 if (EasyCollectionUtil.isEmpty(sorts)) {
                     EntityQueryExpressionBuilder entityQueryExpressionBuilder = (EntityQueryExpressionBuilder) getEntitySQLContext().getEntityExpressionBuilder();
