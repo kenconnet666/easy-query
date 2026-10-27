@@ -1,0 +1,2 @@
+# WSL/容器里执行的脚本必须是 LF，不受 core.autocrlf 影响
+*.sh text eol=lf
