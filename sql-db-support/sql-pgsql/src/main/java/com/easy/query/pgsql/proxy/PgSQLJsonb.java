@@ -2,15 +2,21 @@ package com.easy.query.pgsql.proxy;
 
 import com.easy.query.core.proxy.PropTypeColumn;
 import com.easy.query.core.proxy.extension.dialect.DialectExpressions;
+import com.easy.query.core.proxy.extension.functions.type.AnyTypeExpression;
+
+import java.util.function.Consumer;
 
 /**
- * fork：一列 jsonb 在 PostgreSQL 上的条件（由 {@code PgSQL.jsonb(col)} 得到）。方法都是加到当前 where 里的语句。
+ * fork：一列 jsonb 在 PostgreSQL 上的函数（由 {@code PgSQL.jsonb(col)} 得到）。
+ * 条件方法是加到当前 where 里的语句；局部修改用 {@link #edit}。
  * 键是否存在用 {@code jsonb_exists*} 函数而不是 {@code ?} 运算符：{@code ?} 会被 JDBC 当成参数占位符。
+ *
+ * @param <T> 列的属性类型
  */
-public final class PgSQLJsonb {
-    private final PropTypeColumn<?> column;
+public final class PgSQLJsonb<T> {
+    private final PropTypeColumn<T> column;
 
-    public PgSQLJsonb(PropTypeColumn<?> column) {
+    public PgSQLJsonb(PropTypeColumn<T> column) {
         this.column = column;
     }
 
@@ -37,6 +43,19 @@ public final class PgSQLJsonb {
     /** 顶层这些键都有：{@code jsonb_exists_all(col::jsonb, ARRAY[?, ...]::text[])}。 */
     public void hasAllKeys(String... keys) {
         DialectExpressions.predicate(column, "jsonb_exists_all(({0})::jsonb," + textArray(keys.length) + ")", args(keys));
+    }
+
+    /**
+     * 局部修改这一列（按调用顺序作用在 {@code col::jsonb} 上），结果与列同类型，update 里写回：
+     * {@code .setColumns(u -> u.attrs().set(PgSQL.jsonb(u.attrs()).edit(e -> e.set("level", "3").remove("old"))))}
+     */
+    public AnyTypeExpression<T> edit(Consumer<PgSQLJsonbEdit> changes) {
+        PgSQLJsonbEdit edit = new PgSQLJsonbEdit(column);
+        changes.accept(edit);
+        if (edit.args().length == 1) {
+            throw new IllegalArgumentException("PgSQL.jsonb(..).edit made no change");
+        }
+        return DialectExpressions.sameType(column, edit.template(), edit.args());
     }
 
     /** ARRAY[{1},{2},…]::text[]：参数从 {1} 起，{0} 是列。 */
