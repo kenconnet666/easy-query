@@ -5,10 +5,11 @@
  */
 import { after, describe, it } from 'node:test'
 import pg from 'pg'
-import { createDb, type Statement } from '@eqts/core'
-import { schema, type TestEnv } from '../../core/test/fixture.ts'
+import assert from 'node:assert/strict'
+import { createDb, sql, type Statement } from '@eqts/core'
+import { Post, schema, seed, User, type TestEnv } from '../../core/test/fixture.ts'
 import { liveSuite } from '../../core/test/suite.ts'
-import { postgres } from '../src/index.ts'
+import { Pg, postgres } from '../src/index.ts'
 
 const DDL = [
   'CREATE SCHEMA IF NOT EXISTS eqts',
@@ -39,4 +40,18 @@ for (const url of urls) {
   }
 
   liveSuite(`postgres ${new URL(url).port}`, open)
+
+  describe(`postgres ${new URL(url).port}: Pg.* functions`, () => {
+    it('jsonb, arrays and full-text search', async () => {
+      const { db } = await seed(await open())
+      assert.equal(await db.queryable(User).where((u) => Pg.jsonb(u.attrs).contains('{"tags":["vip"]}')).count(), 1)
+      assert.equal(await db.queryable(User).where((u) => Pg.jsonb(u.attrs).hasKey('tags')).count(), 3)
+      const tags = sql<string[]>`ARRAY['a', 'b']`
+      assert.equal(await db.queryable(User).where(() => [Pg.array(tags).hasAll('a', 'b'), Pg.array(tags).length().eq(2)]).count(), 3)
+      assert.equal(await db.queryable(User).where(() => Pg.array(tags).hasAny('z')).count(), 0)
+      const hits = await db.queryable(Post).where((p) => Pg.fulltext(p.title).matches('tips')).select((p) => ({ title: p.title, rank: Pg.fulltext(p.title).rank('tips') })).toList()
+      assert.deepEqual(hits.map((h) => h.title), ['orm tips'])
+      assert.ok(hits[0]!.rank > 0)
+    })
+  })
 }

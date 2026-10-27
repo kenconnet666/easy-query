@@ -4,11 +4,12 @@
 
 ## 当前
 
-- 下一步：M5 T3（TS 版 PG / HANA、方言入口、拦截器、upsert、窗口），然后 M6 收尾（合并上游、文档索引、可回馈上游的清单）。
+- ROADMAP 的"成熟"条件已满足（M0–M4、M5 T0–T3、flow 验收），停下汇报。之后可做 M6：合并上游、文档索引、可回馈上游的清单；T4 pull 视需要。
 - flow 验收分支 `eq-fork-acceptance`（本地，不推送）：每个工作项前 fetch 并 merge flow 的 origin/master。
 
 ## 最近完成
 
+- M5 T3 完成（PR #23–#27）：TS 版 PG（pg）、HANA（hdb）适配；拦截器 tenant / touch；upsert（HANA 为 MERGE）；窗口函数 win.*；toList limit / first；方言入口 MySQL / Pg / Hana；update(X).entity(row)。五个库共 147 个用例通过。
 - M4 完成（PR #20–#22）：MySQL JSON 路径条件与 `edit`（8.0.18 实测）、PG jsonb `edit` / `PgSQL.array` / `PgSQL.fulltext`、HANA `Hana.text` 全文检索（需 FULLTEXT INDEX）。HANA 层级函数、计算视图传参进 BACKLOG。
 - M3b 收尾的上游实库基线：无回归（见 baseline.md 运行记录）。
 - M3b 全部完成（PR #12–#18）：3.3 JsonValueConverter + JsonCodec、3.4 窗口 frame / 全局窗口 / ntile 等、3.5 rollup / cube / grouping、3.6 eqNullSafe / nullIf、3.7 dateTrunc、3.8 PgSQL.returning、3.9 forUpdateNoWait / forUpdateSkipLocked；每项在 MySQL 8.0.18、PG 17、HANA 实测（3.8 仅 PG）。

@@ -6,7 +6,10 @@
  * 适配器自带一个小连接池（hdb 一个 client 就是一条连接）。自增主键在同一条连接上用 CURRENT_IDENTITY_VALUE() 取回。
  */
 import hdb, { type Client, type ClientOptions } from 'hdb'
+import { hanaFunctions } from './functions.ts'
 import { Dialect, SqlWriter, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type InsertNode, type Session, type TransactionOptions } from '@eqts/core'
+
+export { Hana } from './functions.ts'
 
 /** HANA 的 LIMIT 不能省、OFFSET 前必须有 LIMIT */
 const NO_LIMIT = 2147483647
@@ -20,6 +23,7 @@ export class HanaDialect extends Dialect {
       length: (a) => `LENGTH(${a[0]})`,
       // HANA 的 CONCAT 只收两个参数
       concat: (a) => `(${a.join(' || ')})`,
+      ...hanaFunctions,
     }
   }
 

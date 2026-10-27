@@ -9,7 +9,10 @@
  */
 import pg from 'pg'
 import type { Pool, PoolClient, QueryConfig, QueryResult } from 'pg'
+import { pgFunctions } from './functions.ts'
 import { Dialect, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type TransactionOptions } from '@eqts/core'
+
+export { Pg } from './functions.ts'
 
 export class PostgresDialect extends Dialect {
   readonly name = 'postgres'
@@ -21,7 +24,7 @@ export class PostgresDialect extends Dialect {
 
   /** CONCAT 是可变参数函数，推不出参数的类型：每项都转成 text */
   protected override functions(): Record<string, FunctionRenderer> {
-    return { ...super.functions(), concat: (a) => `CONCAT(${a.map((x) => `CAST(${x} AS text)`).join(', ')})` }
+    return { ...super.functions(), ...pgFunctions, concat: (a) => `CONCAT(${a.map((x) => `CAST(${x} AS text)`).join(', ')})` }
   }
 
   /** PG 有布尔类型，不转 1 / 0 */

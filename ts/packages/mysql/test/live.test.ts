@@ -6,15 +6,16 @@
 import { after, describe, it } from 'node:test'
 import { createPool, type Pool } from 'mysql2/promise'
 import { createDb, type Statement } from '@eqts/core'
-import { schema, type TestEnv } from '../../core/test/fixture.ts'
+import assert from 'node:assert/strict'
+import { Post, schema, seed, User, type TestEnv } from '../../core/test/fixture.ts'
 import { liveSuite } from '../../core/test/suite.ts'
-import { mysql } from '../src/index.ts'
+import { MySQL, mysql } from '../src/index.ts'
 
 const DDL = [
   'DROP TABLE IF EXISTS t_comment, t_post, t_user, t_company',
   'CREATE TABLE t_company (id BIGINT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL)',
   'CREATE TABLE t_user (id BIGINT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL, age INT, company_id BIGINT, attrs JSON NOT NULL, created_at DATETIME(3) NOT NULL)',
-  'CREATE TABLE t_post (id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL, title VARCHAR(200) NOT NULL, amount DECIMAL(12,2) NOT NULL)',
+  'CREATE TABLE t_post (id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL, title VARCHAR(200) NOT NULL, amount DECIMAL(12,2) NOT NULL, FULLTEXT KEY ft_title (title))',
   'CREATE TABLE t_comment (id BIGINT AUTO_INCREMENT PRIMARY KEY, post_id BIGINT NOT NULL, body VARCHAR(200) NOT NULL)',
 ]
 
@@ -48,4 +49,17 @@ for (const url of urls) {
   }
 
   liveSuite(`mysql ${new URL(url).port}`, open)
+
+  describe(`mysql ${new URL(url).port}: MySQL.* functions`, () => {
+    it('json predicates and full-text match', async () => {
+      const { db } = await seed(await open())
+      assert.equal(await db.queryable(User).where((u) => MySQL.json(u.attrs).contains('"vip"', '$.tags')).count(), 1)
+      assert.equal(await db.queryable(User).where((u) => MySQL.json(u.attrs).hasMember('vip', '$.tags')).count(), 1)
+      assert.equal(await db.queryable(User).where((u) => MySQL.json(u.attrs).containsPath('$.tags', '$.nope')).count(), 3)
+      assert.equal(await db.queryable(User).where((u) => MySQL.json(u.attrs).containsAllPaths('$.tags', '$.nope')).count(), 0)
+      const hits = await db.queryable(Post).where((p) => MySQL.match(p.title).against('hello')).select((p) => ({ title: p.title, score: MySQL.match(p.title).score('hello') })).toList()
+      assert.equal(hits.length, 1)
+      assert.ok(hits[0]!.score > 0)
+    })
+  })
 }

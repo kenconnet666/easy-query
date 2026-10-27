@@ -170,6 +170,16 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>): void {
       assert.equal(await db.queryable(Post).count(), 2)
     })
 
+    it('updates a whole row by primary key', async () => {
+      const { db } = await seeded()
+      const alice = await db.queryable(User).where((u) => u.name.eq('alice')).single()
+      assert.equal(await db.update(User).entity({ ...alice, name: 'alice2', attrs: { tags: ['x'] } }).execute(), 1)
+      const after = await db.queryable(User).where((u) => u.id.eq(alice.id)).single()
+      assert.equal(after.name, 'alice2')
+      assert.deepEqual(after.attrs, { tags: ['x'] })
+      assert.equal(after.createdAt.toISOString(), alice.createdAt.toISOString())
+    })
+
     it('deletes everything only with all()', async () => {
       const { db } = await seeded()
       assert.equal(await db.delete(Comment).all().execute(), 2)
