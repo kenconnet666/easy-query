@@ -1,6 +1,7 @@
 package com.easy.query.db2.expression;
 
 import com.easy.query.core.basic.jdbc.parameter.ToSQLContext;
+import com.easy.query.core.enums.QueryLockEnum;
 import com.easy.query.core.exception.EasyQueryInvalidOperationException;
 import com.easy.query.core.expression.parser.core.available.TableAvailable;
 import com.easy.query.core.expression.segment.Column2Segment;
@@ -138,5 +139,14 @@ public class DB2QuerySQLExpression extends QuerySQLExpressionImpl {
         } else {
             return EasyCollectionUtil.first(keyProperties);
         }
+    }
+
+    /** fork：DB2 没有 NOWAIT；SKIP LOCKED DATA 未经实库验证，先明确报不支持 */
+    @Override
+    protected String lockClause(QueryLockEnum lock) {
+        if (lock != QueryLockEnum.FOR_UPDATE) {
+            throw new UnsupportedOperationException("DB2 dialect does not support " + lock);
+        }
+        return super.lockClause(lock);
     }
 }
