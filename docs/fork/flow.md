@@ -26,8 +26,21 @@ flow（C:\Users\lionheart\IdeaProjects\flow）是 fork 的第一个真实使用�
 
 ## 验收方式
 
-- flow 仓库本地分支 `eq-fork-acceptance`，从最新的远程 main 切出，只本地提交、不推送。
-- **跟进 main**：flow 的 main 仍在别处持续开发。每做一个 flow 相关工作项之前、每个里程碑检查点，都 `git fetch` 后把 `origin/main` **merge** 进分支（不 rebase，免得要强推），再把新进来的代码也改成新写法；冲突以 main 的业务逻辑为准、只改写持久层写法。
+- flow 仓库本地分支 `eq-fork-acceptance`，从最新的远程 master 切出，只本地提交、不推送。
+- **跟进 main**：flow 的 master 仍在别处持续开发。每做一个 flow 相关工作项之前、每个里程碑检查点，都 `git fetch` 后把 `origin/master` **merge** 进分支（不 rebase，免得要强推），再把新进来的代码也改成新写法；冲突以 master 的业务逻辑为准、只改写持久层写法。
 - 每处改动在代码里写中文注释说明用了 fork 的哪项能力、替代了什么旧写法，方便 review 与回退。
 - fork 在临时 worktree 里 `versions:set 3.3.1-ext-SNAPSHOT` 后 install；flow 分支把 `easy-query.version` 指过去。
 - 每项记录：改了哪些文件、净减多少行、flow 实库测试（MySQL 8.4 与 PolarDB 替身）是否全过。
+
+## 验收记录
+
+flow 实库测试（flow-it，4 批）在 MySQL 8.0.18（PolarDB 替身，3318）与 8.4（3306）上跑；fork 版本 3.3.1-ext-SNAPSHOT。
+
+| 日期 | flow 提交 | fork 项 | 改动 | 结果 |
+|---|---|---|---|---|
+| 2026-10-27 | 4a7ad74 | —（flow 自身的 bug） | FlowMetrics 的 Gauge 改强引用，修指标偶发 NaN；1 文件 +3/−1 | 两库全过 |
+| 2026-10-27 | bc99023 | M1.4 Instant、flow 自改的条件计数 | StatsQueries：`count().filter()` 一次出三个数，`duration` 直接用 Instant 列；3 文件 +24/−21 | 两库全过 |
+| 2026-10-27 | f2e6e42 | — | merge origin/master（新进来的代码无需改写） | — |
+| 2026-10-28 | 8deaf1c | M3.1 TableNameMapping、M3.2 InsertSelect | Archives 改为 `ARCHIVE` 映射 + `read(archived, ...)`，归档搬迁用 InsertSelect；InboxQueries / InstanceQueries / Participation / FlowContractChecks 走 `Archives.read`，删掉 information_schema 列清单、手写 INSERT … SELECT、attachArchivedInstances 补实例与 exists 改写；5 文件 +76/−118 | 两库各 100 个用例通过（1 个原本跳过） |
+
+截至 2026-10-28，origin/master 最新提交（5f9d42b）已合入，M3a 的 flow 验收项全部完成。
