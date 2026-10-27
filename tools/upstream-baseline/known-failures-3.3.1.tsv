@@ -1,0 +1,57 @@
+EncryptionTest.phoneTest	FAIL	java.lang.AssertionError: 
+EncryptionTest.phoneTest1	ERROR	java.lang.IllegalArgumentException: SysUser.phone decrypt cant decode base64:123
+EncryptionTest.phoneTest2	FAIL	java.lang.AssertionError: expected:<1> but was:<0>
+EncryptionTest.phoneTest3	FAIL	java.lang.AssertionError: expected:<11> but was:<0>
+EncryptionTest.phoneTest4	FAIL	java.lang.AssertionError: expected:<1> but was:<0>
+MigrationTest.createTableSQLTest1	FAIL	org.junit.ComparisonFailure: expected:<...y_migration_blog` ( [ `id` VARCHAR(255) NOT NULL , `create_time` DATETIME(3) NULL  COMMENT '创建时间;创建时间', `update_time` DATETIME(3) NULL  COMMENT '修改时间;修改时间', `create_by` VARCHAR(255) NULL  COMMENT '创建人;创建人', `update
+MigrationTest.createTableSQLTest4	FAIL	org.junit.ComparisonFailure: expected:<[2a927e4ae0dbf7d6f6d687a50888df93]> but was:<[f076e9e0d34e90d1a6658f4fcb018ab5]>
+QueryTest14.testLikeColumn2	ERROR	java.sql.SQLException: Illegal mix of collations (utf8mb4_general_ci,IMPLICIT) and (utf8mb4_0900_ai_ci,IMPLICIT) for operation 'like'
+QueryTest18.esss	ERROR	java.lang.IllegalArgumentException: SysUser.phone decrypt cant decode base64:123
+QueryTest18.test14	ERROR	java.lang.IllegalArgumentException: SysUser.phone decrypt cant decode base64:123
+QueryTest18.testSubCountPage1	FAIL	java.lang.AssertionError: expected:<2> but was:<1>
+QueryTest19.testDoc100	FAIL	java.lang.AssertionError: expected:<3> but was:<1>
+QueryTest19.testDoc99	FAIL	java.lang.AssertionError: expected:<2> but was:<1>
+QueryTest19.testTime	FAIL	java.lang.AssertionError: expected:<2023-05-25T10:48:05> but was:<2026-10-28T22:19:31>
+QueryTest21.searchCountPageTest	FAIL	org.junit.ComparisonFailure: expected:<...itle` LIKE ? LIMIT 1[0]> but was:<...itle` LIKE ? LIMIT 1[]>
+QueryTest25.test11a	ERROR	com.fasterxml.jackson.core.JsonParseException: Unrecognized token 'OK': was expecting (JSON String, Number, Array, Object or token 'null', 'true' or 'false')  at [Source: REDACTED (`StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION` disabled); line: 1, column: 3]
+QueryTest25.test11a1	ERROR	com.fasterxml.jackson.core.JsonParseException: Unrecognized token 'OK': was expecting (JSON String, Number, Array, Object or token 'null', 'true' or 'false')  at [Source: REDACTED (`StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION` disabled); line: 1, column: 3]
+QueryTest25.topicIntegerTest	ERROR	com.fasterxml.jackson.core.JsonParseException: Unrecognized token 'OK': was expecting (JSON String, Number, Array, Object or token 'null', 'true' or 'false')  at [Source: REDACTED (`StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION` disabled); line: 1, column: 3]
+QueryTest25.xxx	ERROR	com.fasterxml.jackson.core.JsonParseException: Unrecognized token 'OK': was expecting (JSON String, Number, Array, Object or token 'null', 'true' or 'false')  at [Source: REDACTED (`StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION` disabled); line: 1, column: 3]
+QueryTest3.nativePage4	FAIL	java.lang.AssertionError: expected:<1> but was:<0>
+QueryTest3.nativePage5	FAIL	java.lang.AssertionError: expected:<1> but was:<0>
+QueryTest3.nativePage6	FAIL	java.lang.AssertionError: expected:<1> but was:<0>
+QueryTest3.testAndOr1	FAIL	java.lang.AssertionError: 
+QueryTest4.queryFirstSingle	FAIL	java.lang.AssertionError: 
+QueryTest4.testSQLFunc5	FAIL	org.junit.ComparisonFailure: expected:<202[3-05-25]> but was:<202[6-10-28]>
+QueryTest4.testSQLFunc6	FAIL	org.junit.ComparisonFailure: expected:<202[3-05-25]> but was:<202[6-10-28]>
+QueryTest4.testSQLFunc7	FAIL	org.junit.ComparisonFailure: expected:<202[3-05-25]> but was:<202[6-10-28]>
+QueryTestRelationTest.testRelation	ERROR	java.sql.SQLException: Incorrect DATETIME value: '123123'
+ShardingTest.<init>	ERROR	java.sql.SQLSyntaxErrorException: Table 'easy-query-test.t_topic_sharding_ds' doesn't exist
+UpdateTest.updateTrackParameterTest3	FAIL	org.junit.ComparisonFailure: expected:<108(Integer),202[3-06-01T10:48:05](LocalDateTime),8(St...> but was:<108(Integer),202[6-11-04T22:19:31](LocalDateTime),8(St...>
+UpperPropertyTest.test1	ERROR	java.sql.SQLException: Field 'create_time' doesn't have a default value
+click.ClickHouseTest.testDelete1	FAIL	java.lang.AssertionError: 
+click.ClickHouseTest.testDelete2	FAIL	java.lang.AssertionError: 
+click.ClickHouseTest.testUpdate1	FAIL	java.lang.AssertionError: 
+click.ClickHouseTest.testUpdate2	FAIL	java.lang.AssertionError: 
+dameng.DamengForUpdateTest.<init>	ERROR	java.net.ConnectException: Connection refused: connect
+dameng.DamengQueryTest.<init>	ERROR	java.lang.NoClassDefFoundError: com.easy.query.test.dameng.DamengBaseTest
+dameng.MathQueryTest.<init>	ERROR	java.lang.NoClassDefFoundError: com.easy.query.test.dameng.DamengBaseTest
+dameng.UpdateJoinTest.<init>	ERROR	java.lang.NoClassDefFoundError: com.easy.query.test.dameng.DamengBaseTest
+doc.DocTest.test1	FAIL	java.lang.AssertionError: 
+doc.DocTest.testTopic	FAIL	org.junit.ComparisonFailure: expected:<...te_time` DESC LIMIT [20]> but was:<...te_time` DESC LIMIT [1]>
+h2.H2QueryTest.testDDL	FAIL	org.junit.ComparisonFailure: expected:<[ CREATE TABLE IF NOT EXISTS t_topic (  id VARCHAR(255) NOT NULL , stars INT NULL , title VARCHAR(255) NULL , create_time TIMESTAMP(3) NULL ,   PRIMARY KEY (id)] );> but was:<[  CREATE TABLE IF NOT EXISTS t_topic (   id VARCHAR(255) NOT NULL ,  stars INT NULL ,
+h2.H2QueryTest.testDDL2	FAIL	org.junit.ComparisonFailure: expected:<[ CREATE TABLE IF NOT EXISTS t_multi_primary (  id1 VARCHAR(255) NOT NULL , id2 VARCHAR(255) NOT NULL ,   PRIMARY KEY (id1, id2)] );> but was:<[  CREATE TABLE IF NOT EXISTS t_multi_primary (   id1 VARCHAR(255) NOT NULL ,  id2 VARCHAR(255) NOT NULL ,    PRIMARY 
+h2.v2.H2V2Test.<init>	ERROR	org.junit.ComparisonFailure: expected:<[ CREATE TABLE IF NOT EXISTS "t_all_type" (  "id" VARCHAR(255) NOT NULL , "number_decimal" DECIMAL(16,2) NULL , "number_float" FLOAT NULL , "number_double" DOUBLE NULL , "number_short" SMALLINT NULL , "number_integer" INT NULL , "number_long" BIGINT NULL , "num
+kingbase.MyKingbaseESTest.testaa	FAIL	java.lang.AssertionError: expected:<3> but was:<1>
+kingbase.MyKingbaseESTest.testaa1	FAIL	java.lang.AssertionError: expected:<3> but was:<1>
+migration.MigrationDamengTest.test	ERROR	java.net.ConnectException: Connection refused: connect
+migration.MigrationPgTest.test	FAIL	org.junit.ComparisonFailure: expected:<[1cd82fb71caf196a00eaa729911127b2]> but was:<[a3c22ba0c6c30bad5fdd8d9f79092d0b]>
+mssql.MSSQLMathQueryTest.<init>	ERROR	com.microsoft.sqlserver.jdbc.SQLServerException: 通过端口 1433 连接到主机 localhost 的 TCP/IP 连接失败。错误:“Socket operation on nonsocket: configureBlocking。请验证连接属性。确保 SQL Server 的实例正在主机上运行，且在此端口接受 TCP/IP 连接，还要�
+mssql.MSSQLTest1.<init>	ERROR	com.microsoft.sqlserver.jdbc.SQLServerException: 通过端口 1433 连接到主机 localhost 的 TCP/IP 连接失败。错误:“Socket operation on nonsocket: configureBlocking。请验证连接属性。确保 SQL Server 的实例正在主机上运行，且在此端口接受 TCP/IP 连接，还要�
+mssql.MsSQLQueryTest.<init>	ERROR	java.lang.NoClassDefFoundError: com.easy.query.test.mssql.MsSQLBaseTest
+mssql.MsSQLUpdateJoinTest.<init>	ERROR	java.lang.NoClassDefFoundError: com.easy.query.test.mssql.MsSQLBaseTest
+mssqlrownumber.MsSQLRowNumberQueryTest.<init>	ERROR	com.microsoft.sqlserver.jdbc.SQLServerException: 通过端口 1433 连接到主机 localhost 的 TCP/IP 连接失败。错误:“connect timed out。请验证连接属性。确保 SQL Server 的实例正在主机上运行，且在此端口接受 TCP/IP 连接，还要确保防火墙没有阻止到�
+mysql8.MySQL8Test2.test	FAIL	org.junit.ComparisonFailure: expected:<[dbbff7673035e7092de7c1c6aae99fcb]> but was:<[7a4e5b9581c332e7de8ce2c0a0da8e90]>
+mysql8.MySQL8Test5.testSysDeptCTE	FAIL	org.junit.ComparisonFailure: expected:<[[SysDeptTreeResp(id=2, pid=0, name=总部B, deep=2, children=[SysDeptTreeResp(id=21, pid=2, name=研发中心, deep=1, children=[SysDeptTreeResp(id=211, pid=21, name=abc-算法部, deep=0, children=[])])]), SysDeptTreeResp(id=2, pid=0, name=总部B, deep=2, ch
+search.EasySearchBaseOpExtraTests.testTypeMismatch	ERROR	java.sql.SQLException: Incorrect DATETIME value: '??'
+sqlite.SQLiteTest.<init>	ERROR	java.sql.SQLException: path to '/Users/xuejiaming/Desktop/dromara/easy-query/sql-test/src/main/resources/sqlite_test.db': 'C:\Users\xuejiaming' does not exist
