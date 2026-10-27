@@ -61,6 +61,12 @@ public class TableNameMappingSqlTest {
     }
 
     @Test
+    public void mappedTableNameIsReadable() {
+        Assert.assertEquals("t_fork_post_archive", ARCHIVE.tableName(ForkPost.class));
+        Assert.assertNull(TableNameMapping.empty().tableName(ForkPost.class));
+    }
+
+    @Test
     public void emptyMappingChangesNothing() {
         Assert.assertEquals("SELECT `id`,`name`,`age`,`company_id`,`attrs`,`created_at` FROM `t_fork_user`",
             TableNameMapping.empty().call(() -> mysql.queryable(ForkUser.class).toSQL()));
