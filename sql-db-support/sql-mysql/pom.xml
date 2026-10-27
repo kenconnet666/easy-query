@@ -25,6 +25,13 @@
             <version>${project.version}</version>
             <scope>compile</scope>
         </dependency>
+        <!-- fork：方言专属函数入口（按列包装）要用代理 API 的表达式类型；provided：用代理 API 的项目本来就有它，只用 client API 的不受影响 -->
+        <dependency>
+            <groupId>com.easy-query</groupId>
+            <artifactId>sql-api-proxy</artifactId>
+            <version>${project.version}</version>
+            <scope>provided</scope>
+        </dependency>
 
     </dependencies>
 

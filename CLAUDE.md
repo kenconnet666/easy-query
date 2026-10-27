@@ -46,7 +46,9 @@ wsl -d Debian -- bash -lc 'cd /mnt/c/Users/lionheart/IdeaProjects/easy-query && 
 $env:JAVA_HOME='C:\soft\jdk1.8.0_181'; .\mvnw.cmd -B -T 4 '-Dgpg.skip=true' '-Dmaven.javadoc.skip=true' '-Dmaven.source.skip=true' '-pl' '!sql-extension/sql-springboot4-starter' install
 # 只改了 fork 测试或单个模块时
 $env:JAVA_HOME='C:\soft\jdk1.8.0_181'; .\mvnw.cmd -B -T 4 '-Dgpg.skip=true' '-Dmaven.javadoc.skip=true' '-Dmaven.source.skip=true' -pl sql-fork-test -am test
-# 实库用例（infra/dev 已起）：再加 -Plive
+# 只改了 sql-fork-test 时的快循环（其余模块已 install；sql-test 的 POM 用了 basedir 的 system 依赖，装进仓库后无效，必须同在 reactor 里）
+$env:JAVA_HOME='C:\soft\jdk1.8.0_181'; .\mvnw.cmd -B -o '-Dgpg.skip=true' '-Dmaven.javadoc.skip=true' '-Dmaven.source.skip=true' -pl sql-test,sql-fork-test test
+# 实库用例（infra/dev 已起；MySQL 8.4、8.0.18 基线、PG）：再加 -Plive，可配 '-Dtest=*LiveTest' '-Dsurefire.failIfNoSpecifiedTests=false'
 ```
 
 ```bash

@@ -26,5 +26,7 @@ public class MySQLDatabaseConfiguration implements DatabaseConfiguration {
         services.addService(SQLFunc.class, MySQLFuncImpl.class);
         services.addService(DatabaseMigrationProvider.class, MySQLDatabaseMigrationProvider.class);
         services.addService(MigrationEntityParser.class, MySQLMigrationEntityParser.class);
+        // fork：方言专属函数入口（com.easy.query.mysql.MySQL）据此确认当前是 MySQL 系方言
+        services.addService(MySQLDialectMarker.class, MySQLDialectMarker.INSTANCE);
     }
 }

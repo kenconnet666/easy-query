@@ -31,6 +31,8 @@ public class PgSQLDatabaseConfiguration implements DatabaseConfiguration {
         services.addService(SQLFunc.class, PgSQLFuncImpl.class);
         services.addService(DatabaseMigrationProvider.class, PgSQLDatabaseMigrationProvider.class);
         services.addService(MigrationEntityParser.class, PgSQLMigrationEntityParser.class);
+        // fork：方言专属函数入口（com.easy.query.pgsql.PgSQL）据此确认当前是 PostgreSQL 方言
+        services.addService(PgSQLDialectMarker.class, PgSQLDialectMarker.INSTANCE);
         services.addServiceFactory(JdbcTypeHandlerManager.class,s->{
             EasyJdbcTypeHandlerManager easyJdbcTypeHandlerManager = new EasyJdbcTypeHandlerManager();
             easyJdbcTypeHandlerManager.appendHandler(UUID.class, PgSQLUUIDTypeHandler.INSTANCE,true);
