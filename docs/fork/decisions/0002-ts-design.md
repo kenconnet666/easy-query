@@ -1,6 +1,6 @@
-# 0002 TS 版设计（草案，待用户审阅）
+# 0002 TS 版设计
 
-状态：草案。T0 的类型样板（见末节）通过、用户认可后才开始 T1。
+状态：T0–T2 已实现（`ts/packages/{core,sqlite,mysql}`）。下文已按实现更新；与最初草案不同的地方在末节"实现时的调整"列出。
 
 ## 目标与边界
 
@@ -37,13 +37,13 @@ export const Post = entity('t_post', {
   amount: col.decimal(12, 2),
 })
 
-export const schema = defineSchema({ Company, User, Post }, r => ({
-  User: {
+export const schema = defineSchema({ Company, User, Post }, {
+  User: r => ({
     company: r.one('Company', { from: 'companyId', to: 'id' }),   // companyId 可空 → 导航结果可空
     posts: r.many('Post', { from: 'id', to: 'userId' }),
-  },
-  Post: { user: r.one('User', { from: 'userId', to: 'id' }) },
-}))
+  }),
+  Post: r => ({ user: r.one('User', { from: 'userId', to: 'id' }) }),
+})
 
 export type UserRow = Row<typeof User>    // { id: number; name: string; age: number | null; ... }
 ```
@@ -69,13 +69,13 @@ import { mysql } from '@eqts/mysql'          // 方言 + 驱动适配（mysql2 �
 
 const db = createDb({
   schema,
-  dialect: mysql({ pool }),                 // 也有 pg()、sqlite()、hana()
-  interceptors: [tenant(() => currentTenantId()), touch('updatedAt')],
-  logSql: true,
+  adapter: mysql(pool),                     // 方言 + 驱动；也有 sqlite(database)，pg()、hana() 在 T3
+  log: s => console.log(s.sql, s.params),
+  // interceptors: [tenant(() => currentTenantId()), touch('updatedAt')],   T3
 })
 ```
 
-拦截器对应 easy-query 的谓词拦截与写入拦截：查询时给有租户列的表加条件，插入/更新时补值；单条查询可 `.noInterceptor('tenant')`。
+拦截器（T3）对应 easy-query 的谓词拦截与写入拦截：查询时给有租户列的表加条件，插入/更新时补值；单条查询可 `.noInterceptor('tenant')`。
 
 ## 3. 查询
 
@@ -100,9 +100,10 @@ const list = await db.queryable(User)
 ```
 
 - 终结方法：`toList()`、`first()`（可能 undefined）、`single()`（不存在抛错）、`count()`、`any()`、`toPage(page, size)` → `{ rows, total }`。
-- 不写 `select` 时返回整行 `UserRow`；`.include(u => u.posts, q => q.where(...))` 把导航挂到整行上，类型变成 `UserRow & { posts: PostRow[] }`。
+- 不写 `select` 时返回整行 `UserRow`；`.include(u => ({ company: u.company, posts: u.posts.where(...).toList() }))` 把导航挂到整行上，类型变成 `UserRow & { company: CompanyRow | null; posts: PostRow[] }`。
 - 条件组合：数组 = AND；`or(...)`、`and(...)`、`not(...)` 是普通函数；比较方法 `eq ne gt ge lt le in notIn like startsWith endsWith isNull isNotNull between`。
-- 隐式子查询：`any / none / count / sum / avg / max / min / toList / first`；可先 `.where(...)` 再聚合。
+- 隐式子查询：`any / none / count / sum / avg / max / min / toList`；可先 `.where(...)` 再聚合（`first`、每个父行取前 N 条在 T3）。
+- 构建器不可变：方法只记下 lambda，执行时才求值，所以 `const base = db.queryable(User).where(...)` 可以分别 `base.count()`、`base.limit(10).toList()`。
 
 分组：
 
@@ -114,18 +115,19 @@ const stats = await db.queryable(Post)
   .toList()
 ```
 
-窗口（与 Java 版 M3.4 同步）：`p.amount.sum().over(w => w.partitionBy(p.userId).orderBy(p.id).rows('unboundedPreceding', 'currentRow'))`。
+窗口（与 Java 版 M3.4 同步，T3）：`p.amount.sum().over(w => w.partitionBy(p.userId).orderBy(p.id).rows('unboundedPreceding', 'currentRow'))`。
 
 ## 4. 写入
 
 ```ts
 const id = await db.insert(User).values({ name: 'a', companyId: null, attrs: { tags: [] }, createdAt: new Date() }).returnId()
-await db.insert(User).values(rows)                                   // 批量
-await db.insert(User).values(row).onConflict(u => u.id).merge(u => [u.name])   // upsert；.ignore() 为忽略
+await db.insert(User).values(rows).execute()                         // 批量；设置的列不同的行分成几条语句
 const n = await db.update(User).set(u => ({ name: 'b', age: u.age.plus(1) })).where(u => u.id.eq(id)).execute()
-await db.update(User).entity(row)                                    // 按主键整行更新
 await db.delete(User).where(u => u.id.eq(id)).execute()              // 无 where 的删除要显式 .all()
+// T3：upsert db.insert(User).values(row).onConflict(u => u.id).merge(u => [u.name])；按主键整行更新 db.update(User).entity(row)
 ```
+
+条件全被跳过（`id && u.id.eq(id)` 而 id 为空）也算没有条件，同样拒绝执行。更新与删除里不允许多对一导航（要 JOIN，各库写法不一），一对多的 `any()` 可以。
 
 `values` 的参数类型由列推导：`generated()`、带默认值、可空的列是可选的。
 
@@ -169,16 +171,21 @@ ts/
   test/              跨方言用例（SQL 文本快照 + 本地实库）
 ```
 
-## 8. T0 类型样板（通过才进 T1）
+## 8. T0 类型样板（结果）
 
-- 50 个实体、互相引用的关系、5 层导航的 select：`tsc --noEmit` 在限定时间内完成，无 `TS2589`（实例化过深）、无循环推导错误。
-- 负例用 `@ts-expect-error` 固定：用错列类型比较、select 引用不存在的列、insert 缺必填列。
-- IDE：VS Code / WebStorm 里补全不卡（人工抽查，记录在本文件）。
+- `packages/core/test/stress.check.ts`（`tools/gen-stress.ts` 生成）：50 个实体、每个都有多对一 next/prev 与一对多 children，5 层导航的 where/select/toList。
+  TypeScript 7.0.2：Check time 0.15s、Instantiations 7.9 万、无 `TS2589`、无循环推导错误。
+- `packages/core/test/types.check.ts`：结果类型的正例（Equal 断言）与负例（`@ts-expect-error`）：用错列类型比较、对数字列调用 like、不存在的列、一对多导航直接取列、
+  实体不在 schema 里、insert 缺必填列或类型不对、set 类型不对、关系的 from 列或目标实体写错。
+- 已知的类型精度边界：`date` 列是文字，所以 `year()` 也允许在字符串列上调用。
 
-## 待用户确认的点
+## 实现时的调整（相对草案）
 
-1. 列与关系分开定义（`entity` + `defineSchema`）可以接受吗？
-2. 条件用数组 + 短路（`age != null && u.age.ge(age)`）作为主要写法，可以吗？
-3. 默认值映射：bigint→number（超范围报错）、decimal→string、date→string、datetime→Date。
-4. 事务用显式 `tx`，不做隐式上下文。
-5. 包名 `@eqts/*` 暂定。
+1. 关系按实体分函数写：`{ User: r => ({ ... }) }`。每个函数拿到本实体专用的 builder，`from` 只能补全本实体的列；关系类型由返回值反推。
+2. `createDb({ schema, adapter })`：adapter = 方言 + 驱动，由数据库包提供（`sqlite(database)`、`mysql(pool)`）。
+3. 写入都以 `.execute()` 结束（不做 thenable 构建器），与查询的终结方法一致，读代码时一眼看出哪里真正执行。
+4. `include` 接收对象：`include(u => ({ posts: u.posts.toList() }))`，名字即结果里的属性名，多对一与一对多写法一致。
+5. toList 的过滤条件里不能引用外层查询的导航（第二条查询里没有外层表），渲染前 `checkAliases` 会报出清楚的错误。
+6. Node 直接运行 `.ts`（类型擦除），所以源码只用可擦除语法（`erasableSyntaxOnly`）：不用参数属性、enum、namespace。
+
+草案里待确认的 5 点（列与关系分开定义；条件用数组 + 短路；bigint→number 超范围报错、decimal→string、date→string、datetime→Date；事务用显式 `tx`；包名 `@eqts/*` 暂定）按原方案实施：用户审阅草案后未提异议，要求开始无人值守执行。有异议时改动集中在 schema.ts / relations.ts。

@@ -55,3 +55,8 @@ $env:JAVA_HOME='C:\soft\jdk1.8.0_181'; .\mvnw.cmd -B -o '-Dgpg.skip=true' '-Dmav
 # 上游实库基线（MySQL、PG、Redis 已起；输出到 target/upstream-baseline）
 bash tools/upstream-baseline/run.sh
 ```
+
+```powershell
+# TS 版（ts/，Node 24 直接跑 .ts，pnpm）：类型检查（含类型样板）+ SQLite 单测；设了 EQTS_MYSQL_URLS 时再跑 MySQL 实库套件
+cd ts; pnpm install; pnpm run typecheck; $env:EQTS_MYSQL_URLS='mysql://root:root@127.0.0.1:3318,mysql://root:root@127.0.0.1:3306'; pnpm test
+```

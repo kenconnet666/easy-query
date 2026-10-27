@@ -19,4 +19,4 @@
 
 ## 待决（不阻塞，用户有空时看）
 
-- TS 版设计草案 `decisions/0002-ts-design.md` 待用户审阅；审阅前只做类型样板，不开始 T1。
+- TS 版 T0–T2 完成（`ts/`：@eqts/core、@eqts/sqlite、@eqts/mysql），设计与实现差异见 `decisions/0002-ts-design.md` 末节；下一步 M3b，再回 T3。

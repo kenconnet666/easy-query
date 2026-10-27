@@ -65,12 +65,12 @@ M3b：
 
 ## M5 TS 版（本仓库 `ts/`，pnpm workspace；不追求与 Java 生成逐字相同的 SQL，只共享概念与命名）
 
-- [!] T0 设计文档 [decisions/0002-ts-design.md](decisions/0002-ts-design.md)（草案已写，待用户审阅；审阅通过前只做类型样板）：schema 对象定义实体与关系；查询 `db.queryable(User).where(u => [...]).select(u => ({...}))`，条件返回表达式（数组里 false/undefined 跳过）；导航与隐式子查询 `u.posts.any(...)`；对象树 select 结果类型全推导；方言开放注册、专属函数与 Java 同形；驱动可选 peer 依赖；类型性能预算。用最新稳定版 TypeScript，Node ESM
-- [ ] T1 核心 AST + SQLite（node:sqlite，零基础设施）+ MySQL（mysql2）：单表 CRUD、where/select/orderBy/分页、事务
-- [ ] T2 导航：隐式 join、隐式子查询（any/none/count/sum/max/min/toList）、include、对象树 select
-- [ ] T3 PG（pg）、HANA（@sap/hana-client）与方言静态入口
+- [x] T0 设计文档 [decisions/0002-ts-design.md](decisions/0002-ts-design.md) 与类型样板：50 实体 / 5 层导航 tsc 0.15s，无 TS2589；结果类型正例与负例固定在 `ts/packages/core/test/*.check.ts`
+- [x] T1 核心 AST + SQLite（node:sqlite，零基础设施）+ MySQL（mysql2，8.0.18 与 8.4 实测）：CRUD、where/select/orderBy/分页、分组、事务、写入无条件保护
+- [x] T2 导航：隐式 join（可空推导）、隐式子查询（any/none/count/sum/avg/max/min）、toList 对象树（每层一条 IN 查询）、include
+- [ ] T3 PG（pg）、HANA（@sap/hana-client）与方言静态入口；拦截器（租户、写入补值）；upsert、按主键整行更新；窗口函数；toList 每个父行取前 N 条、first
 - [ ] T4 `pull`：从现有库生成 schema 文件（进 BACKLOG，T3 后视情况）
-- CI 加 node job：`tsc --noEmit`、单测、类型性能用例
+- [x] CI 加 ts job：typecheck（含类型样板）、SQLite 单测、MySQL 8.0.18 服务容器跑共用套件
 
 ## M6 成熟收尾
 
