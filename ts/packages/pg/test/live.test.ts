@@ -34,7 +34,8 @@ for (const url of urls) {
   const open = async (): Promise<TestEnv> => {
     for (const statement of DDL) await pool.query(statement)
     const statements: Statement[] = []
-    return { db: createDb({ schema, adapter: postgres(pool), log: (s) => statements.push(s) }), statements }
+    const adapter = postgres(pool)
+    return { db: createDb({ schema, adapter, log: (s) => statements.push(s) }), statements, adapter }
   }
 
   liveSuite(`postgres ${new URL(url).port}`, open)

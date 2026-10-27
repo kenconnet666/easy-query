@@ -3,8 +3,8 @@
  */
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { and, or } from '../src/index.ts'
-import { Comment, Company, Post, seed, User, type TestEnv } from './fixture.ts'
+import { and, createDb, or, touch, type Expr, type Interceptor } from '../src/index.ts'
+import { Comment, Company, Post, schema, seed, User, type TestEnv } from './fixture.ts'
 
 export function liveSuite(name: string, open: () => Promise<TestEnv>): void {
   const seeded = async () => seed(await open())
@@ -196,6 +196,48 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>): void {
       })
       await Promise.all([bump(), bump(), bump()])
       assert.equal((await db.queryable(User).where((u) => u.id.eq(1)).single()).age, 33)
+    })
+  })
+
+  describe(`${name}: upsert and interceptors`, () => {
+    it('upserts by merging, defaulting the merged columns, and ignoring', async () => {
+      const { db } = await seeded()
+      await db.insert(Company).values({ id: 1, name: 'acme2' }).onConflict((c) => c.id).merge((c) => [c.name]).execute()
+      await db.insert(Company).values({ id: 2, name: 'globex2' }).onConflict((c) => c.id).merge().execute()
+      await db.insert(Company).values({ id: 1, name: 'ignored' }).onConflict((c) => c.id).ignore().execute()
+      const names = await db.queryable(Company).orderBy((c) => c.id).select((c) => ({ name: c.name })).toList()
+      assert.deepEqual(names, [{ name: 'acme2' }, { name: 'globex2' }])
+    })
+
+    it('applies filters to the root, joins, subqueries, toList and writes', async () => {
+      const env = await seeded()
+      const adults: Interceptor = {
+        name: 'adults',
+        filter: (ref, entity) => entity.table === 't_user' && (ref as unknown as { age: Expr<number | null> }).age.ge(18),
+      }
+      const db = createDb({ schema, adapter: env.adapter, interceptors: [adults] })
+      assert.equal(await db.queryable(User).count(), 1)
+      assert.equal(await db.queryable(User).noInterceptor('adults').count(), 3)
+      // LEFT JOIN 的条件进 ON：帖子都在，bob 的帖子作者为 null
+      const authors = await db.queryable(Post).orderBy((p) => p.id).select((p) => ({ author: p.user.name })).toList()
+      assert.deepEqual(authors.map((a) => a.author), ['alice', 'alice', null, null])
+      const companies = await db.queryable(Company).orderBy((c) => c.id).select((c) => ({ n: c.users.count(), users: c.users.toList((u) => ({ name: u.name })) })).toList()
+      assert.deepEqual(companies, [{ n: 1, users: [{ name: 'alice' }] }, { n: 0, users: [] }])
+      assert.equal(await db.update(User).set({ age: 50 }).all().execute(), 1)
+      assert.equal((await env.db.queryable(User).where((u) => u.name.eq('bob')).single()).age, null)
+    })
+
+    it('fills values before insert and update', async () => {
+      const env = await seeded()
+      const defaultAge: Interceptor = {
+        name: 'default-age',
+        beforeInsert: (row, entity) => { if (entity.table === 't_user' && row['age'] === undefined) row['age'] = 1 },
+      }
+      const db = createDb({ schema, adapter: env.adapter, interceptors: [defaultAge, touch('title', () => 'touched')] })
+      await db.insert(User).values({ name: 'dave', attrs: { tags: [] }, createdAt: new Date() }).execute()
+      assert.equal((await db.queryable(User).where((u) => u.name.eq('dave')).single()).age, 1)
+      await db.update(Post).set({ amount: '9.00' }).where((p) => p.id.eq(1)).execute()
+      assert.equal((await db.queryable(Post).where((p) => p.id.eq(1)).single()).title, 'touched')
     })
   })
 }

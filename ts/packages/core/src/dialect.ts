@@ -1,7 +1,7 @@
 /**
  * 方言：把语法树渲染成某种数据库的 SQL。基类按 SQL 标准写，各库继承后只覆盖不同的地方（引号、函数、分页、锁）。
  */
-import type { DeleteNode, InsertNode, Node, SelectNode, UpdateNode } from './ast.ts'
+import type { ConflictNode, DeleteNode, InsertNode, Node, SelectNode, UpdateNode } from './ast.ts'
 import { utcText } from './schema.ts'
 
 export interface Statement {
@@ -95,7 +95,14 @@ export abstract class Dialect {
 
   insert(q: InsertNode, w: SqlWriter = new SqlWriter()): string {
     const rows = q.rows.map((r) => `(${r.map((n) => this.node(n, w)).join(', ')})`).join(', ')
-    return `INSERT INTO ${this.table(q.table)} (${q.columns.map((c) => this.quote(c)).join(', ')}) VALUES ${rows}`
+    return `INSERT INTO ${this.table(q.table)} (${q.columns.map((c) => this.quote(c)).join(', ')}) VALUES ${rows}${q.conflict ? this.onConflict(q.conflict) : ''}`
+  }
+
+  /** upsert 子句；默认是 SQLite / PG 的 ON CONFLICT 写法 */
+  onConflict(c: ConflictNode): string {
+    const target = `(${c.target.map((t) => this.quote(t)).join(', ')})`
+    if (c.update.length === 0) return ` ON CONFLICT ${target} DO NOTHING`
+    return ` ON CONFLICT ${target} DO UPDATE SET ${c.update.map((u) => `${this.quote(u)} = excluded.${this.quote(u)}`).join(', ')}`
   }
 
   update(q: UpdateNode, w: SqlWriter = new SqlWriter()): string {

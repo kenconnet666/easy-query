@@ -1,12 +1,13 @@
 /**
  * 插入、更新、删除。更新与删除没有条件时拒绝执行，要整表操作显式调用 all()；条件全被跳过（例如 `id && u.id.eq(id)` 里 id 为空）同样算没有条件。
  */
-import { checkAliases, type Node } from './ast.ts'
+import { checkAliases, type ConflictNode, type Node } from './ast.ts'
 import { SqlWriter, type Statement } from './dialect.ts'
 import { condNode, Expr, toNode, type Cond } from './expr.ts'
 import { REF, Scope, type Ref } from './ref.ts'
 import type { AnySchema, EntityKey } from './relations.ts'
 import type { Entity, Insert, ValueOf } from './schema.ts'
+import { refEntity } from './interceptor.ts'
 import { execute, query, type Context } from './session.ts'
 
 type EntityOf<S extends AnySchema, K extends EntityKey<S>> = S['entities'][K]
@@ -21,21 +22,61 @@ export class Insertable<S extends AnySchema, K extends EntityKey<S>> {
   }
 
   /** 一行或多行；多行时列不同的行分成几条语句 */
-  values(rows: Insert<EntityOf<S, K>> | readonly Insert<EntityOf<S, K>>[]): InsertValues {
+  values(rows: Insert<EntityOf<S, K>> | readonly Insert<EntityOf<S, K>>[]): InsertValues<S, K> {
     const list = (Array.isArray(rows) ? rows : [rows]) as readonly Record<string, unknown>[]
-    return new InsertValues(this.ctx, this.ctx.schema.entities[this.key]!, list)
+    return new InsertValues(this.ctx, this.key, list, undefined)
   }
 }
 
-export class InsertValues {
+type Columns<S extends AnySchema, K extends EntityKey<S>> = (r: Ref<S, K>) => Expr<unknown> | readonly Expr<unknown>[]
+
+export class InsertValues<S extends AnySchema, K extends EntityKey<S>> {
   private readonly ctx: Context
+  private readonly key: K
   private readonly entity: Entity
   private readonly rows: readonly Record<string, unknown>[]
+  private readonly conflict: ConflictNode | undefined
 
-  constructor(ctx: Context, entity: Entity, rows: readonly Record<string, unknown>[]) {
+  constructor(ctx: Context, key: K, rows: readonly Record<string, unknown>[], conflict: ConflictNode | undefined) {
     this.ctx = ctx
-    this.entity = entity
+    this.key = key
+    this.entity = ctx.schema.entities[key]!
     this.rows = rows
+    this.conflict = conflict
+  }
+
+  /**
+   * upsert：target 列（主键或唯一键）冲突时怎么办。
+   * ```ts
+   * db.insert(User).values(row).onConflict(u => u.id).merge(u => [u.name, u.age])   // 用新值更新这些列；不传为插入的全部非冲突列
+   * db.insert(User).values(row).onConflict(u => u.email).ignore()                    // 已存在就跳过
+   * ```
+   * MySQL 按表上的主键 / 唯一键判断冲突（ON DUPLICATE KEY UPDATE），target 只用于 ignore 时的空更新。
+   */
+  onConflict(target: Columns<S, K>): { merge: (columns?: Columns<S, K>) => InsertValues<S, K>; ignore: () => InsertValues<S, K> } {
+    const targetColumns = this.columnNames(target)
+    return {
+      merge: (columns) => {
+        const update = columns ? this.columnNames(columns) : this.insertedColumns().filter((c) => !targetColumns.includes(c))
+        if (update.length === 0) throw new Error(`onConflict(..).merge() on ${this.entity.table} has no column to update; use ignore()`)
+        return new InsertValues(this.ctx, this.key, this.rows, { target: targetColumns, update })
+      },
+      ignore: () => new InsertValues(this.ctx, this.key, this.rows, { target: targetColumns, update: [] }),
+    }
+  }
+
+  /** lambda 里选的列 → 库里的列名 */
+  private columnNames(pick: Columns<S, K>): string[] {
+    const picked = pick(new Scope(this.ctx.schema, { n: 0 }, false).root(this.key) as Ref<S, K>)
+    return (Array.isArray(picked) ? picked : [picked]).map((e: Expr<unknown>) => {
+      if (e.node.k !== 'col') throw new Error('onConflict / merge take plain columns of the inserted entity')
+      return e.node.name
+    })
+  }
+
+  private insertedColumns(): string[] {
+    const props = Object.keys(this.entity.columns).filter((p) => this.rows.some((r) => r[p] !== undefined))
+    return props.map((p) => this.entity.columnNames[p]!)
   }
 
   /** 返回影响的行数 */
@@ -70,7 +111,7 @@ export class InsertValues {
   toSQL(): Statement[] {
     if (this.rows.length === 0) return []
     const groups = new Map<string, Record<string, unknown>[]>()
-    for (const row of this.rows) {
+    for (const row of this.rows.map((r) => this.ctx.interceptors.beforeInsert(r, this.entity))) {
       const props = Object.keys(this.entity.columns).filter((p) => row[p] !== undefined)
       const id = props.join(',')
       let group = groups.get(id)
@@ -85,6 +126,7 @@ export class InsertValues {
         table: this.entity.table,
         columns: props.map((p) => this.entity.columnNames[p]!),
         rows: rows.map((r) => props.map((p) => toNode(r[p], this.entity.columns[p]!.codec))),
+        conflict: this.conflict,
       }, w)
       return { sql, params: w.params }
     })
@@ -114,13 +156,14 @@ abstract class Filtered {
 
   /** 新的构建现场：不允许 join（各库对 UPDATE/DELETE 带 JOIN 的写法不一致） */
   protected scope(): { scope: Scope; root: any; where: Node[] } {
-    const scope = new Scope(this.ctx.schema, { n: 0 }, false)
+    const scope = new Scope(this.ctx.schema, { n: 0 }, false, (ref) => this.ctx.interceptors.filters(ref, refEntity(ref)))
     const root = scope.root(this.key)
     const where = this.state.where.map((f) => condNode(f(root))).filter((n): n is Node => n !== undefined)
     if (where.length === 0 && !this.state.all) {
       throw new Error(`refusing to ${this.verb} every row of ${this.ctx.schema.entities[this.key]!.table} without a condition; call .all() if that is intended`)
     }
-    return { scope, root, where }
+    // 拦截器的条件在"有没有条件"的检查之后加：租户条件不算调用方写的条件
+    return { scope, root, where: [...where, ...scope.filters(root)] }
   }
 
   protected abstract readonly verb: string
@@ -158,7 +201,7 @@ export class Updatable<S extends AnySchema, K extends EntityKey<S>> extends Filt
     if (!this.values) throw new Error('update needs set(...)')
     const { root, where } = this.scope()
     const entity = this.ctx.schema.entities[this.key]!
-    const values = this.values(root)
+    const values = this.ctx.interceptors.beforeUpdate(this.values(root), entity)
     const set = Object.entries(values)
       .filter(([, v]) => v !== undefined)
       .map(([p, v]) => {
