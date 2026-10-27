@@ -1,6 +1,7 @@
 package com.easy.query.mysql.func;
 
 import com.easy.query.core.enums.SQLLikeEnum;
+import com.easy.query.core.enums.GroupingEnum;
 import com.easy.query.core.expression.lambda.SQLActionExpression1;
 import com.easy.query.core.func.SQLFuncImpl;
 import com.easy.query.core.func.SQLFunction;
@@ -69,5 +70,15 @@ public class MySQLFuncImpl extends SQLFuncImpl {
             sqlExpression.apply(s);
             sqlExpression.apply(s);
         };
+    }
+
+    /** fork：MySQL 只有 GROUP BY a, b WITH ROLLUP 一种写法（8.0.12 起可与 ORDER BY 同用），没有 CUBE */
+    @Override
+    public String groupBy(GroupingEnum grouping, String columns) {
+        switch (grouping) {
+            case ROLLUP: return columns + " WITH ROLLUP";
+            case CUBE: throw new UnsupportedOperationException("MySQL does not support GROUP BY CUBE");
+            default: return columns;
+        }
     }
 }

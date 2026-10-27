@@ -859,6 +859,20 @@ public abstract class AbstractEntityQueryable<T1Proxy extends ProxyEntity<T1Prox
 
     @NotNull
     @Override
+    public EntityQueryable<T1Proxy, T1> rollup() {
+        clientQueryable.rollup();
+        return this;
+    }
+
+    @NotNull
+    @Override
+    public EntityQueryable<T1Proxy, T1> cube() {
+        clientQueryable.cube();
+        return this;
+    }
+
+    @NotNull
+    @Override
     public EntityQueryable<T1Proxy, T1> forUpdateNoWait() {
         clientQueryable.forUpdateNoWait();
         return this;

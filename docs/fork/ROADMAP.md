@@ -49,7 +49,7 @@ M3a（flow 用得上，先做；验收 = 在 flow 本地分支改写对应代码
 
 M3b：
 - [x] 3.4 窗口（[features/window.md](features/window.md)）：ROWS/RANGE frame、`over()` 全局窗口、ntile / percent_rank / cume_dist；8 份重复的窗口实现收成 OverSQLFunction / OverBuilder
-- [ ] 3.5 ROLLUP / CUBE / GROUPING SETS 与 `grouping()` 标记
+- [x] 3.5 `rollup()` / `cube()` 与 `grouping()`（[features/grouping.md](features/grouping.md)）：MySQL 为 WITH ROLLUP（无 CUBE）；PG、HANA、MySQL 8.0.18 实测。GROUPING SETS 进 BACKLOG
 - [x] 3.6 NULLIF；null-safe 等值 `eqNullSafe`（[features/null-safe.md](features/null-safe.md)）：MySQL `<=>`、PG `IS NOT DISTINCT FROM`，其他方言用等价的 OR 写法
 - [x] 3.7 日期截断 `dateTrunc`（[features/date-trunc.md](features/date-trunc.md)）：年/季/月/周/日/时/分/秒；PG、MySQL、HANA 实测，其它方言明确报不支持
 - [ ] 3.8 RETURNING（PG 等支持的方言；MySQL/HANA 明确报错）

@@ -3,6 +3,7 @@ package com.easy.query.core.func;
 import org.jetbrains.annotations.NotNull;
 import com.easy.query.core.basic.api.select.Query;
 import com.easy.query.core.enums.SQLLikeEnum;
+import com.easy.query.core.enums.GroupingEnum;
 import com.easy.query.core.expression.lambda.SQLActionExpression1;
 import com.easy.query.core.expression.parser.core.SQLTableOwner;
 import com.easy.query.core.expression.parser.core.available.TableAvailable;
@@ -49,6 +50,19 @@ public interface SQLFunc extends AggregateSQLFunc, SQLStringFunc, SQLDateTimeFun
      * @param left  左边，只选一项
      * @param right 右边，只选一项
      */
+    /**
+     * fork：GROUP BY 关键字之后的部分。默认 {@code ROLLUP(a, b)} / {@code CUBE(a, b)}；MySQL 写作 {@code a, b WITH ROLLUP}、不支持 CUBE。
+     *
+     * @param columns 已渲染好的分组键（逗号分隔）
+     */
+    default String groupBy(GroupingEnum grouping, String columns) {
+        switch (grouping) {
+            case ROLLUP: return "ROLLUP(" + columns + ")";
+            case CUBE: return "CUBE(" + columns + ")";
+            default: return columns;
+        }
+    }
+
     default SQLFunction nullSafeEquals(SQLActionExpression1<ColumnFuncSelector> left, SQLActionExpression1<ColumnFuncSelector> right) {
         // 模板里每个占位符只能出现一次（参数按选择的顺序绑定），所以两边各选两次
         return anySQLFunction("(({0} = {1}) OR ({2} IS NULL AND {3} IS NULL))", s -> {
