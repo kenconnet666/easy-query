@@ -62,6 +62,7 @@ fork 自 [dromara/easy-query](https://github.com/dromara/easy-query)，软 fork�
 | 流式读取、取消（`withSignal`）、嵌套事务、`await using`、只读事务 | [ts-runtime.md](features/ts-runtime.md) |
 | 方言能力对齐：eqNullSafe、dateTrunc、行锁、rollup/cube、mapTables、INSERT … SELECT、returning | [ts-dialect-parity.md](features/ts-dialect-parity.md) |
 | 代码优先建表（createTables、列元数据、类型映射） | [ts-ddl.md](features/ts-ddl.md) |
+| 写入补全：save 对象图、returnEntity、批量更新、afterWrite 钩子 | [ts-writes.md](features/ts-writes.md) |
 | 视图 `defineView`（可复用、可嵌套的投影，对应 DTO / VO） | [ts-views.md](features/ts-views.md) |
 | 列修饰器：逻辑删除、乐观锁、默认值、枚举、品牌类型、加密 | [ts-column-rules.md](features/ts-column-rules.md) |
 | 多对多导航（经中间表）与复合外键 | [ts-relations.md](features/ts-relations.md) |

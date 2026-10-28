@@ -522,6 +522,72 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>, options: L
     })
   })
 
+  describe(`${name}: save, returnEntity, batch updates and write hooks`, () => {
+    const dave = { name: 'dave', age: 40, createdAt: new Date('2026-02-03T00:00:00.000Z'), attrs: { tags: [] as string[] } }
+
+    it('saves a new parent together with its children', async () => {
+      const { db } = await seeded()
+      const saved = await db.save(User, { ...dave, posts: [{ title: 'p1', amount: '1.00' }, { title: 'p2', amount: '2.00' }] }, { cascade: ['posts'] })
+      assert.equal(saved.name, 'dave')
+      // 自增主键取回之后，子行的关联列自动设成它
+      const posts = await db.queryable(Post).where((p) => p.userId.eq(saved.id)).orderBy((p) => p.title).toList()
+      assert.deepEqual(posts.map((p) => p.title), ['p1', 'p2'])
+    })
+
+    it('updates only the given columns of an existing parent and prunes missing children', async () => {
+      const { db } = await seeded()
+      const saved = await db.save(User, { id: 1, name: 'alice2', posts: [{ id: 1, title: 'changed' }] }, { cascade: ['posts'], prune: true })
+      // age 没给，保持 30；alice 的第 2 篇帖子不在列表里被删除；bob 的帖子不受影响
+      assert.deepEqual([saved.name, saved.age], ['alice2', 30])
+      const posts = await db.queryable(Post).orderBy((p) => p.id).toList()
+      assert.deepEqual(posts.map((p) => [p.id, p.title]), [[1, 'changed'], [3, 'orm_v2'], [4, 'hello']])
+      await assert.rejects(() => db.save(User, { id: 1 }, { cascade: ['company' as never] }), /not a plain one-to-many/)
+    })
+
+    it('rolls the whole save back when a child fails', async () => {
+      const { db } = await seeded()
+      // 第二个子行缺必填的标题：整个 save 在一个事务里，父行也不该留下
+      await assert.rejects(() => db.save(User, { ...dave, posts: [{ title: 'ok', amount: '1.00' }, { amount: '1.00' }] }, { cascade: ['posts'] }))
+      assert.equal(await db.queryable(User).where((u) => u.name.eq('dave')).count(), 0)
+    })
+
+    it('returns the whole inserted row', async () => {
+      const { db } = await seeded()
+      const post = await db.insert(Post).values({ userId: 1, title: 'ret', amount: '5.00' }).returnEntity()
+      assert.deepEqual([typeof post.id, post.title, Number(post.amount)], ['number', 'ret', 5])
+    })
+
+    it('returns database defaults and client defaults of an inserted row', { skip: !options.extraTables }, async () => {
+      const { db } = await seeded()
+      const doc = await db.insert(Doc).values({ title: 't', createdBy: 'x', secret: 'hush' }).returnEntity()
+      // status 是库里的默认值，token 是 $default，version 是乐观锁的初值，secret 已透明解密
+      assert.deepEqual([doc.status, doc.token, doc.version, doc.deleted, doc.secret], ['draft', 'tok', 0, false, 'hush'])
+    })
+
+    it('updates a batch of entities by primary key', async () => {
+      const { db } = await seeded()
+      const rows = await db.queryable(Post).orderBy((p) => p.id).toList()
+      assert.equal(await db.update(Post).entities(rows.map((r) => ({ ...r, title: r.title.toUpperCase() }))).execute(), 4)
+      assert.deepEqual((await db.queryable(Post).orderBy((p) => p.id).toList()).map((p) => p.title), ['ORM TIPS', 'SQL 100%', 'ORM_V2', 'HELLO'])
+    })
+
+    it('notifies afterWrite interceptors after every write', async () => {
+      const env = await seeded()
+      const events: string[] = []
+      const audit = { name: 'audit', afterWrite: (e: { kind: string; entity: { table: string }; affected: number }) => { events.push(`${e.kind}:${e.entity.table}:${e.affected}`) } }
+      const db = createDb({ schema, adapter: env.adapter, interceptors: [audit] })
+      await db.insert(Company).values({ name: 'initech' }).execute()
+      await db.update(Post).set({ title: 'x' }).where((p) => p.userId.eq(1)).execute()
+      await db.delete(Comment).where((c) => c.id.eq(1)).execute()
+      await db.insert(Company).values({ name: 'umbrella' }).returnId()
+      assert.deepEqual(events, ['insert:t_company:1', 'update:t_post:2', 'delete:t_comment:1', 'insert:t_company:1'])
+      // afterWrite 抛错，写入所在的事务回滚
+      const failing = createDb({ schema, adapter: env.adapter, interceptors: [{ name: 'veto', afterWrite: () => { throw new Error('vetoed') } }] })
+      await assert.rejects(() => failing.transaction(async (tx) => { await tx.insert(Company).values({ name: 'vetoed' }).execute() }), /vetoed/)
+      assert.equal(await db.queryable(Company).where((c) => c.name.eq('vetoed')).count(), 0)
+    })
+  })
+
   describe(`${name}: code-first DDL`, { skip: options.ddl === false }, () => {
     it('creates a table from the entity definition and round-trips every column type', async () => {
       const env = await seeded()

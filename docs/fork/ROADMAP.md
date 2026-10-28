@@ -98,7 +98,7 @@ P1（能力对齐）：
 - [x] 7.15 方言能力对齐 Java M3b：`rollup / cube / grouping`、`eqNullSafe`、`dateTrunc`、`forUpdateNoWait / SkipLocked`、`INSERT … SELECT`、表名映射、通用 `returning`
 - [x] 7.16 代码优先 DDL：schema → `CREATE TABLE`（与 T4 `pull` 互补）；`decimal(p, s)` 的精度要先留在列元数据里
 - [x] 7.17 JSON 列接 Standard Schema（zod / valibot / arktype）做读写校验
-- [ ] 7.18 写入补全：`returnEntity`、按实体批量更新 / 删除、`save`（带导航的对象图保存）、拦截器 after 钩子
+- [x] 7.18 写入补全：`returnEntity`、按实体批量更新 / 删除、`save`（带导航的对象图保存）、拦截器 after 钩子
 
 P2：对象过滤式 where、字段加密之外的行为级 SQL 参数格式化；读写分离（做成 Adapter 路由）。分库分表、实体追踪不做。
 

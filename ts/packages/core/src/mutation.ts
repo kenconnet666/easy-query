@@ -4,11 +4,11 @@
 import { checkAliases, type ConflictNode, type Node, type SelectNode } from './ast.ts'
 import { SqlWriter, type Statement } from './dialect.ts'
 import { condNode, Expr, toNode, type Cond } from './expr.ts'
-import type { Built, Query } from './query.ts'
+import { newQueryable, type Built, type Query } from './query.ts'
 import { REF, Scope, type Ref } from './ref.ts'
 import type { AnySchema, EntityKey } from './relations.ts'
 import type { Entity, Insert, Row, ValueOf } from './schema.ts'
-import { refEntity, type Interceptors } from './interceptor.ts'
+import { refEntity, type Interceptors, type WriteEvent } from './interceptor.ts'
 import { execute, query, type Context } from './session.ts'
 
 type EntityOf<S extends AnySchema, K extends EntityKey<S>> = S['entities'][K]
@@ -44,12 +44,14 @@ export class Returning<R> {
   private readonly entity: Entity
   private readonly statements: readonly Statement[]
   private readonly props: readonly string[]
+  private readonly kind: WriteEvent['kind']
 
-  constructor(ctx: Context, entity: Entity, statements: readonly Statement[], props: readonly string[]) {
+  constructor(ctx: Context, entity: Entity, statements: readonly Statement[], props: readonly string[], kind: WriteEvent['kind']) {
     this.ctx = ctx
     this.entity = entity
     this.statements = statements
     this.props = props
+    this.kind = kind
   }
 
   toSQL(): Statement[] {
@@ -68,6 +70,7 @@ export class Returning<R> {
         })) as R)
       }
     }
+    await this.ctx.interceptors.afterWrite({ kind: this.kind, entity: this.entity, affected: out.length })
     return out
   }
 }
@@ -85,6 +88,25 @@ function returningProps(entity: Entity, columns: readonly string[]): string[] {
  * await db.insert(PostArchive).fromQuery(db.queryable(Post).where(p => p.createdAt.lt(cutoff)).select(p => ({ id: p.id, userId: p.userId, title: p.title, amount: p.amount }))).execute()
  * ```
  */
+/** 一批按主键更新的语句，见 Updatable.entities */
+export class BatchUpdate {
+  private readonly updates: readonly { execute(): Promise<number>; toSQL(): Statement }[]
+
+  constructor(updates: readonly { execute(): Promise<number>; toSQL(): Statement }[]) {
+    this.updates = updates
+  }
+
+  toSQL(): Statement[] {
+    return this.updates.map((u) => u.toSQL())
+  }
+
+  async execute(): Promise<number> {
+    let affected = 0
+    for (const update of this.updates) affected += await update.execute()
+    return affected
+  }
+}
+
 export class InsertSelect {
   private readonly ctx: Context
   private readonly entity: Entity
@@ -111,7 +133,9 @@ export class InsertSelect {
 
   /** 返回插入的行数 */
   async execute(): Promise<number> {
-    return (await execute(this.ctx, this.toSQL())).affected
+    const affected = (await execute(this.ctx, this.toSQL())).affected
+    await this.ctx.interceptors.afterWrite({ kind: 'insert', entity: this.entity, affected })
+    return affected
   }
 }
 
@@ -123,6 +147,8 @@ export class InsertValues<S extends AnySchema, K extends EntityKey<S>> {
   private readonly entity: Entity
   private readonly rows: readonly Record<string, unknown>[]
   private readonly conflict: ConflictNode | undefined
+  /** 经过插入拦截器、$default 填好值的行：只算一次，toSQL 和 returnEntity 看到同一份（$default 可能是随机的 uuid） */
+  private filledRows: Record<string, unknown>[] | undefined
 
   constructor(ctx: Context, key: K, rows: readonly Record<string, unknown>[], conflict: ConflictNode | undefined) {
     this.ctx = ctx
@@ -170,13 +196,14 @@ export class InsertValues<S extends AnySchema, K extends EntityKey<S>> {
   returning(): Returning<Row<EntityOf<S, K>>>
   returning<C extends keyof Row<EntityOf<S, K>> & string>(...columns: C[]): Returning<Pick<Row<EntityOf<S, K>>, C>>
   returning(...columns: string[]): Returning<unknown> {
-    return new Returning(this.ctx, this.entity, this.toSQL(), returningProps(this.entity, columns))
+    return new Returning(this.ctx, this.entity, this.toSQL(), returningProps(this.entity, columns), 'insert')
   }
 
   /** 返回影响的行数 */
   async execute(): Promise<number> {
     let affected = 0
     for (const statement of this.toSQL()) affected += (await execute(this.ctx, statement)).affected
+    await this.ctx.interceptors.afterWrite({ kind: 'insert', entity: this.entity, affected })
     return affected
   }
 
@@ -184,10 +211,37 @@ export class InsertValues<S extends AnySchema, K extends EntityKey<S>> {
   async returnId(): Promise<number | bigint> {
     const statements = this.toSQL()
     if (this.rows.length !== 1 || statements.length !== 1) throw new Error('returnId() needs exactly one row')
-    if (this.ctx.dialect.generatedKeys === 'returning') return this.returnIdByReturning(statements[0]!)
-    const result = await execute(this.ctx, statements[0]!)
-    if (result.insertId === undefined) throw new Error(`the ${this.ctx.dialect.name} driver did not report a generated key`)
-    return result.insertId
+    let id: number | bigint
+    if (this.ctx.dialect.generatedKeys === 'returning') {
+      id = await this.returnIdByReturning(statements[0]!)
+    } else {
+      const result = await execute(this.ctx, statements[0]!)
+      if (result.insertId === undefined) throw new Error(`the ${this.ctx.dialect.name} driver did not report a generated key`)
+      id = result.insertId
+    }
+    await this.ctx.interceptors.afterWrite({ kind: 'insert', entity: this.entity, affected: 1 })
+    return id
+  }
+
+  /**
+   * 插入一行并返回完整的行（含自增主键、库里的默认值、触发器改过的值）。
+   * 支持 RETURNING 的库（PG、SQLite）一条语句搞定；MySQL、HANA 先插入拿到主键，再按主键查回来。
+   */
+  async returnEntity(): Promise<Row<EntityOf<S, K>>> {
+    if (this.rows.length !== 1) throw new Error('returnEntity() needs exactly one row')
+    if (this.entity.primaryKey.length === 0) throw new Error(`returnEntity() needs a primary key on ${this.entity.table}`)
+    if (this.ctx.dialect.supportsReturning) return (await this.returning().execute())[0] as Row<EntityOf<S, K>>
+    const values: Record<string, unknown> = { ...this.filled()[0] }
+    const generated = this.entity.primaryKey.filter((k) => values[k] === undefined)
+    if (generated.length > 1) throw new Error('returnEntity() can only generate a single-column primary key')
+    if (generated.length === 1) values[generated[0]!] = await this.returnId()
+    else await this.execute()
+    const key = this.key
+    const found = await newQueryable(this.ctx, key)
+      .where((r: any) => this.entity.primaryKey.map((k) => (r[k] as Expr<unknown>).eq(values[k] as never)))
+      .first()
+    if (!found) throw new Error(`returnEntity(): the inserted row of ${this.entity.table} is not visible to the current interceptors`)
+    return found as Row<EntityOf<S, K>>
   }
 
   private async returnIdByReturning(statement: Statement): Promise<number | bigint> {
@@ -202,10 +256,14 @@ export class InsertValues<S extends AnySchema, K extends EntityKey<S>> {
     return Number.isSafeInteger(n) ? n : BigInt(String(value))
   }
 
+  private filled(): Record<string, unknown>[] {
+    return (this.filledRows ??= this.rows.map((r) => this.ctx.interceptors.beforeInsert(r, this.entity)))
+  }
+
   toSQL(): Statement[] {
     if (this.rows.length === 0) return []
     const groups = new Map<string, Record<string, unknown>[]>()
-    for (const row of this.rows.map((r) => this.ctx.interceptors.beforeInsert(r, this.entity))) {
+    for (const row of this.filled()) {
       const props = Object.keys(this.entity.columns).filter((p) => row[p] !== undefined)
       const id = props.join(',')
       let group = groups.get(id)
@@ -278,7 +336,9 @@ abstract class Filtered {
   }
 
   async execute(): Promise<number> {
-    return (await execute(this.ctx, this.toSQL())).affected
+    const affected = (await execute(this.ctx, this.toSQL())).affected
+    await this.ctx.interceptors.afterWrite({ kind: this.verb as WriteEvent['kind'], entity: this.ctx.schema.entities[this.key]!, affected })
+    return affected
   }
 
   abstract toSQL(): Statement
@@ -347,7 +407,16 @@ export class Updatable<S extends AnySchema, K extends EntityKey<S>> extends Filt
   returning<C extends keyof Row<EntityOf<S, K>> & string>(...columns: C[]): Returning<Pick<Row<EntityOf<S, K>>, C>>
   returning(...columns: string[]): Returning<unknown> {
     const entity = this.ctx.schema.entities[this.key]!
-    return new Returning(this.ctx, entity, [this.toSQL()], returningProps(entity, columns))
+    return new Returning(this.ctx, entity, [this.toSQL()], returningProps(entity, columns), 'update')
+  }
+
+  /**
+   * 按主键逐行更新一批实体（每行一条 `entity(row)` 语句，带乐观锁条件），返回总共更新的行数。
+   * 不自带事务：要么全成要么全败请放进 `db.transaction`。
+   */
+  entities(rows: readonly Row<EntityOf<S, K>>[]): BatchUpdate {
+    const statements = rows.map((row) => new Updatable<S, K>(this.ctx, this.key as K, this.state, this.values).entity(row))
+    return new BatchUpdate(statements)
   }
 
   all(): Updatable<S, K> {
@@ -404,7 +473,7 @@ export class Deletable<S extends AnySchema, K extends EntityKey<S>> extends Filt
   returning<C extends keyof Row<EntityOf<S, K>> & string>(...columns: C[]): Returning<Pick<Row<EntityOf<S, K>>, C>>
   returning(...columns: string[]): Returning<unknown> {
     const entity = this.ctx.schema.entities[this.key]!
-    return new Returning(this.ctx, entity, [this.toSQL()], returningProps(entity, columns))
+    return new Returning(this.ctx, entity, [this.toSQL()], returningProps(entity, columns), 'delete')
   }
 
   /** 物理删除：绕过逻辑删除（读过滤与改写成 update 都不再生效），已被逻辑删除的行也会被删掉 */

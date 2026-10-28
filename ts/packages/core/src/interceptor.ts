@@ -11,6 +11,13 @@ import { condNode, type Cond } from './expr.ts'
 import { refColumn, REF, type AnyRef } from './ref.ts'
 import type { ColumnOptions, Entity } from './schema.ts'
 
+/** afterWrite 收到的事件：哪个实体、什么操作、影响了多少行（逻辑删除的 delete 仍然是 'delete'） */
+export interface WriteEvent {
+  readonly kind: 'insert' | 'update' | 'delete'
+  readonly entity: Entity
+  readonly affected: number
+}
+
 export interface Interceptor {
   /** 用于 noInterceptor(name) */
   readonly name: string
@@ -20,6 +27,8 @@ export interface Interceptor {
   beforeInsert?(row: Record<string, unknown>, entity: Entity): void
   /** 更新前补 set 的值；set 是副本，可以直接改 */
   beforeUpdate?(set: Record<string, unknown>, entity: Entity): void
+  /** 写入语句成功执行之后（在同一个事务里）调用：审计日志、发事件、失效缓存。抛错会让这次写入失败（事务里则回滚） */
+  afterWrite?(event: WriteEvent): void | Promise<void>
   /** 删除前询问：返回值表示"不要物理删除，改成把这些列更新成这些值"（逻辑删除）；返回 undefined 表示照常删除 */
   deleteAs?(entity: Entity): Record<string, unknown> | undefined
 }
@@ -116,6 +125,10 @@ export class Interceptors {
       if (n) nodes.push(n)
     }
     return nodes
+  }
+
+  async afterWrite(event: WriteEvent): Promise<void> {
+    for (const interceptor of this.list) await interceptor.afterWrite?.(event)
   }
 
   /** 这个实体的 delete 要不要改写成 update：返回要更新的列，undefined 表示物理删除 */
