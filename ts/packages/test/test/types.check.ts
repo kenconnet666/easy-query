@@ -1,7 +1,7 @@
 /**
  * 类型层面的检查：只参与 tsc，不运行。正例用 Equal 断言推导出的类型，负例用 @ts-expect-error 固定"必须报错"。
  */
-import { col, createDb, defineSchema, entity, sql, win, type Adapter, type Insert, type Row } from '@eqts/core'
+import { col, createDb, defineSchema, defineView, entity, sql, win, type Adapter, type Insert, type Row, type ViewOf } from '@eqts/core'
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
 function expect<T extends true>(): T | void {}
@@ -174,3 +174,19 @@ taggedDb.insert(Tagged).values({ kind: 'a' })
 taggedDb.insert(Tagged).values({ kind: 'c' })
 // @ts-expect-error kind 必填
 taggedDb.insert(Tagged).values({})
+
+// 视图：可复用、可嵌套的投影，结果类型自动推导
+const PostCard = defineView(schema, Post, (p) => ({ title: p.title, author: p.user.name }))
+const UserCard = defineView(schema, User, (u) => ({ id: u.id, company: u.company.name, posts: u.posts.toList(PostCard) }))
+async function views() {
+  const rows = await db.queryable(User).select(UserCard).toList()
+  type Card = { id: number; company: string | null; posts: { title: string; author: string }[] }
+  expect<Equal<typeof rows, Card[]>>()
+  expect<Equal<ViewOf<typeof UserCard>, Card>>()
+  // 在别的 select 里展开视图
+  const posts = await db.queryable(Post).select((p) => ({ ...PostCard(p), id: p.id })).toList()
+  expect<Equal<typeof posts, { title: string; author: string; id: number }[]>>()
+}
+void views
+// @ts-expect-error 视图属于 User，不能用在 Post 的查询上
+db.queryable(Post).select(UserCard)

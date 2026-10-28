@@ -3,7 +3,7 @@
  */
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { and, caseWhen, createDb, or, touch, win, type Expr, type ExecutionEvent, type Interceptor } from '@eqts/core'
+import { and, caseWhen, createDb, defineView, or, touch, win, type Expr, type ExecutionEvent, type Interceptor } from '@eqts/core'
 import { CalendarDateTime, fromDate, parseDate, Time } from '@internationalized/date'
 import { Decimal } from 'decimal.js'
 import { Comment, Company, Doc, Ext, Member, Note, Post, Role, schema, seed, User, UserRole, type TestEnv } from './fixture.ts'
@@ -505,6 +505,27 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>, options: L
       const owners = await db.queryable(Note).orderBy((n) => n.body).select((n) => ({ body: n.body, owner: n.member.name })).toList()
       assert.deepEqual(owners.map((o) => [o.body, o.owner]), [['a', 'm1'], ['b', 'm1'], ['c', 'm3'], ['d', 'm2']])
       assert.equal(await db.queryable(Member).where((m) => m.notes.any((n) => n.body.eq('c'))).count(), 1)
+    })
+  })
+
+  describe(`${name}: views`, () => {
+    it('reuses and nests projections', async () => {
+      const { db } = await seeded()
+      const PostCard = defineView(schema, Post, (p) => ({ title: p.title, owner: p.user.name }))
+      const UserCard = defineView(schema, User, (u) => ({
+        name: u.name,
+        company: u.company.name,
+        posts: u.posts.orderBy((p) => p.id).limit(1).toList(PostCard),
+      }))
+      const rows = await db.queryable(User).orderBy((u) => u.id).select(UserCard).toList()
+      assert.deepEqual(rows, [
+        { name: 'alice', company: 'acme', posts: [{ title: 'orm tips', owner: 'alice' }] },
+        { name: 'bob', company: 'acme', posts: [{ title: 'orm_v2', owner: 'bob' }] },
+        { name: 'carol', company: null, posts: [] },
+      ])
+      // 视图也能在别的 select 里展开，并且能和 where / join 一起用
+      const cards = await db.queryable(Post).where((p) => p.id.eq(4)).select((p) => ({ ...PostCard(p), id: p.id })).toList()
+      assert.deepEqual(cards, [{ title: 'hello', owner: 'bob', id: 4 }])
     })
   })
 

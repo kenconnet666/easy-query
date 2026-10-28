@@ -92,7 +92,7 @@ P0（日常会撞上，或有正确性风险）：
 - [x] 7.19 扩展列类型：`@eqts/decimal`（decimal.js）、`@eqts/date`（`@internationalized/date`）、`col.bytes()`、精确的 64 位整数；`NumericExtensions` / `TemporalExtensions` 声明合并扩展点，`ColumnKind` 开放；与 json-wire 的种类表一一对应并做过端到端往返检查（vue-tsx-pro 的日期组件用同一批类）
 
 P1（能力对齐）：
-- [ ] 7.12 `defineView`：可复用、可嵌套的投影（对应 Java 的 DTO / VO）
+- [x] 7.12 `defineView`：可复用、可嵌套的投影（对应 Java 的 DTO / VO）
 - [ ] 7.13 `Expr` 类型门面：用条件类型交叉让补全只列出适用的方法；date 列改模板字面量类型
 - [ ] 7.14 流式读取（`for await`）、`AbortSignal`、`await using` 事务、savepoint 嵌套事务、只读事务
 - [ ] 7.15 方言能力对齐 Java M3b：`rollup / cube / grouping`、`eqNullSafe`、`dateTrunc`、`forUpdateNoWait / SkipLocked`、`INSERT … SELECT`、表名映射、通用 `returning`
