@@ -16,6 +16,8 @@ const NO_LIMIT = 2147483647
 
 export class HanaDialect extends Dialect {
   readonly name = 'hana'
+  /** HANA 没有 WITH RECURSIVE（层级查询用 HIERARCHY 函数） */
+  override readonly supportsRecursiveCte = false
 
   protected override functions(): Record<string, FunctionRenderer> {
     return {

@@ -1,7 +1,7 @@
 /**
  * 方言：把语法树渲染成某种数据库的 SQL。基类按 SQL 标准写，各库继承后只覆盖不同的地方（引号、函数、分页、锁）。
  */
-import type { ConflictNode, DeleteNode, InsertNode, Node, SelectNode, UpdateNode } from './ast.ts'
+import type { ConflictNode, CteNode, DeleteNode, InsertNode, Node, SelectNode, UpdateNode } from './ast.ts'
 import { utcText } from './schema.ts'
 
 export interface Statement {
@@ -124,7 +124,26 @@ export abstract class Dialect {
     return ' FOR UPDATE'
   }
 
+  /** 是否支持递归 CTE（WITH RECURSIVE）。HANA 没有，用层级函数代替 */
+  readonly supportsRecursiveCte: boolean = true
+
+  /** 完整的查询语句：WITH 子句 + 查询体 + UNION 的各成员 */
   select(q: SelectNode, w: SqlWriter = new SqlWriter()): string {
+    // 绑定参数按渲染顺序收集，所以必须严格按文本顺序渲染：WITH、主体、再是 UNION 的各成员
+    const withs = q.ctes && q.ctes.length > 0 ? this.withClause(q.ctes, w) : ''
+    let sql = withs + this.selectCore(q, w)
+    for (const u of q.unions ?? []) sql += ` UNION ${u.all ? 'ALL ' : ''}${this.selectCore(u.q, w)}`
+    return sql
+  }
+
+  private withClause(ctes: readonly CteNode[], w: SqlWriter): string {
+    const recursive = ctes.some((c) => c.recursive)
+    if (recursive && !this.supportsRecursiveCte) throw new Error(`recursive CTEs are not supported by the ${this.name} dialect`)
+    const parts = ctes.map((c) => `${this.quote(c.name)} (${c.columns.map((x) => this.quote(x)).join(', ')}) AS (${this.select(c.q, w)})`)
+    return `WITH ${recursive ? 'RECURSIVE ' : ''}${parts.join(', ')} `
+  }
+
+  private selectCore(q: SelectNode, w: SqlWriter): string {
     const cols = q.columns.length === 0 ? '1' : q.columns.map((c) => `${this.node(c.e, w)} AS ${this.quote(c.as)}`).join(', ')
     let s = `SELECT ${q.distinct ? 'DISTINCT ' : ''}${cols} FROM ${q.from.sub ? `(${this.select(q.from.sub, w)})` : this.table(q.from.table)} ${q.from.alias}`
     for (const j of q.joins) s += ` ${j.kind === 'inner' ? 'INNER' : 'LEFT'} JOIN ${this.table(j.table)} ${j.alias} ON ${this.node(j.on, w)}`
@@ -182,6 +201,7 @@ export abstract class Dialect {
       case 'in':
         if (n.list.length === 0) return n.not ? '1 = 1' : '1 = 0'
         return `${this.operand(n.e, w)} ${n.not ? 'NOT ' : ''}IN (${n.list.map((i) => this.node(i, w)).join(', ')})`
+      case 'in_sub': return `${this.operand(n.e, w)} ${n.not ? 'NOT ' : ''}IN (${this.select(n.q, w)})`
       case 'between': return `${this.operand(n.e, w)} BETWEEN ${this.operand(n.lo, w)} AND ${this.operand(n.hi, w)}`
       case 'like': return `${this.operand(n.e, w)} ${n.not ? 'NOT ' : ''}LIKE ${this.node(n.pattern, w)}${this.likeEscape()}`
       case 'fn': {

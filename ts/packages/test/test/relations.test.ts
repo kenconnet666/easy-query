@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { col, defineSchema, entity } from '@eqts/core'
-import { User } from '../src/fixture.ts'
+import { Post, User } from '../src/fixture.ts'
 import { memoryDb } from '../src/sqlite-env.ts'
 
 describe('relations: SQL text', async () => {
@@ -38,5 +38,20 @@ describe('relations: definition checks', () => {
   it('makes the target nullable when any column of a composite key is nullable', () => {
     const schema = defineSchema({ A, B }, { A: (r) => ({ b: r.one('B', { from: ['x', 'z'], to: ['x', 'y'] }) }) })
     assert.equal(schema.relations.A.b.nullable, true)
+  })
+})
+
+describe('subqueries: SQL text', async () => {
+  const { db } = await memoryDb()
+
+  it('renders in(subquery), unions and CTEs in text order so bound parameters line up', () => {
+    const s = db.queryable(User).where((u) => u.id.in(db.queryable(Post).where((p) => p.title.eq('x')).select((p) => p.userId))).select((u) => ({ name: u.name })).toSQL()
+    assert.equal(s.sql, 'SELECT t0."name" AS "c0" FROM "t_user" t0 WHERE t0."id" IN (SELECT t0."user_id" AS "c0" FROM "t_post" t0 WHERE t0."title" = ?)')
+    const a = db.queryable(User).where((u) => u.name.eq('a')).select((u) => ({ name: u.name }))
+    const b = db.queryable(User).where((u) => u.name.eq('b')).select((u) => ({ name: u.name }))
+    const u = a.unionAll(b).where((r) => r.name.ne('z')).toSQL()
+    assert.equal(u.sql, 'SELECT t0."c0" AS "c0" FROM (SELECT t0."name" AS "c0" FROM "t_user" t0 WHERE t0."name" = ?'
+      + ' UNION ALL SELECT t0."name" AS "c0" FROM "t_user" t0 WHERE t0."name" = ?) t0 WHERE t0."c0" <> ?')
+    assert.deepEqual(u.params, ['a', 'b', 'z'])
   })
 })

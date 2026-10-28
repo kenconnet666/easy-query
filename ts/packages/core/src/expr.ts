@@ -2,7 +2,7 @@
  * 带类型的表达式。`u.name` 是 `Expr<string>`，`u.age` 是 `Expr<number | null>`；条件是 `Expr<boolean>`，可以存进变量、放进数组。
  * 只适用于某些类型的方法用 `this` 参数限定（例如 like 只能在字符串上调用），用错在编译期报错。
  */
-import type { AggregateFn, BinaryOp, Node, OrderNode } from './ast.ts'
+import type { AggregateFn, BinaryOp, Node, OrderNode, SelectNode } from './ast.ts'
 import { col, type Codec, type DecimalText } from './schema.ts'
 
 export const codecs = {
@@ -12,8 +12,24 @@ export const codecs = {
   string: col.string().codec,
 }
 
+/** 子查询的标记：Queryable 实现它，in(...) 和与标量比较时通过它取出子查询的语法树 */
+export const SUBQUERY: unique symbol = Symbol('eqts.subquery')
+
+/**
+ * 能当子查询用的东西（一条 Queryable）。T 是它每行产生的值的类型：`select(p => p.userId)` 是 number。
+ * 子查询是独立的语句，不能引用外层的表（相关子查询请用一对多导航的 any / count / sum）。
+ */
+export interface Subquery<T> {
+  readonly __row: T
+  [SUBQUERY](): SelectNode
+}
+
+export function isSubquery(value: unknown): value is Subquery<unknown> {
+  return typeof value === 'object' && value !== null && SUBQUERY in value
+}
+
 /** 与 T 比较时右边可以写的值：值本身或同类型的表达式；可空的表达式也行（join 条件里 `c.id.eq(u.companyId)`，NULL 不会等于任何值） */
-export type Operand<T> = NonNullable<T> | Expr<NonNullable<T>> | Expr<T> | Expr<NonNullable<T> | null>
+export type Operand<T> = NonNullable<T> | Expr<NonNullable<T>> | Expr<T> | Expr<NonNullable<T> | null> | Subquery<NonNullable<T>> | Subquery<NonNullable<T> | null>
 
 /**
  * 第三方数值类型的登记处。@eqts/decimal 之类的扩展包用声明合并把自己的类型加进来，
@@ -61,14 +77,22 @@ export class Expr<T> {
   lt(value: Operand<T>): Pred { return this.op('<', value) }
   le(value: Operand<T>): Pred { return this.op('<=', value) }
 
-  /** 空数组时恒为假 */
-  in(values: readonly NonNullable<T>[]): Pred {
-    return pred({ k: 'in', e: this.node, list: values.map((v) => this.operand(v)), not: false })
+  /**
+   * 在这些值里，或在子查询的结果里：`u.id.in(db.queryable(Post).select(p => p.userId))`。
+   * 值列表为空数组时恒为假；子查询必须只选一列。
+   */
+  in(values: readonly NonNullable<T>[] | Subquery<NonNullable<T>> | Subquery<NonNullable<T> | null>): Pred {
+    return this.inNode(values, false)
   }
 
-  /** 空数组时恒为真 */
-  notIn(values: readonly NonNullable<T>[]): Pred {
-    return pred({ k: 'in', e: this.node, list: values.map((v) => this.operand(v)), not: true })
+  /** 不在这些值里 / 子查询的结果里。值列表为空数组时恒为真（子查询里有 NULL 时按 SQL 的 NOT IN 规则，结果为未知） */
+  notIn(values: readonly NonNullable<T>[] | Subquery<NonNullable<T>> | Subquery<NonNullable<T> | null>): Pred {
+    return this.inNode(values, true)
+  }
+
+  private inNode(values: readonly unknown[] | Subquery<unknown>, not: boolean): Pred {
+    if (isSubquery(values)) return pred({ k: 'in_sub', e: this.node, q: values[SUBQUERY](), not })
+    return pred({ k: 'in', e: this.node, list: (values as readonly unknown[]).map((v) => this.operand(v)), not })
   }
 
   between(lo: Operand<T>, hi: Operand<T>): Pred {
@@ -355,6 +379,8 @@ export function orderNodes(items: OrderItem | readonly OrderItem[]): OrderNode[]
 
 export function toNode(value: unknown, codec: Codec<any> | undefined): Node {
   if (value instanceof Expr) return value.node
+  // 子查询当标量用：`(SELECT …)`，要求它只返回一行一列
+  if (isSubquery(value)) return { k: 'sub', q: value[SUBQUERY]() }
   return { k: 'param', value, codec }
 }
 

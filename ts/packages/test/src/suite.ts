@@ -13,6 +13,8 @@ export interface LiveSuiteOptions {
   readonly extensionTypes?: boolean
   /** 库里建了 t_role / t_user_role / t_member / t_note，可以跑多对多与复合外键的用例 */
   readonly extraTables?: boolean
+  /** 是否测试递归 CTE；HANA 没有 WITH RECURSIVE，传 false */
+  readonly recursiveCte?: boolean
 }
 
 export function liveSuite(name: string, open: () => Promise<TestEnv>, options: LiveSuiteOptions = {}): void {
@@ -503,6 +505,86 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>, options: L
       const owners = await db.queryable(Note).orderBy((n) => n.body).select((n) => ({ body: n.body, owner: n.member.name })).toList()
       assert.deepEqual(owners.map((o) => [o.body, o.owner]), [['a', 'm1'], ['b', 'm1'], ['c', 'm3'], ['d', 'm2']])
       assert.equal(await db.queryable(Member).where((m) => m.notes.any((n) => n.body.eq('c'))).count(), 1)
+    })
+  })
+
+  describe(`${name}: subqueries, derived tables, unions and CTEs`, () => {
+    it('uses a subquery in in(...) and as a scalar', async () => {
+      const { db } = await seeded()
+      const q = db.queryable(User).orderBy((u) => u.id)
+      // 有帖子的用户 / 没有帖子的用户 / 有大额帖子的用户
+      assert.deepEqual((await q.where((u) => u.id.in(db.queryable(Post).select((p) => p.userId))).toList()).map((u) => u.name), ['alice', 'bob'])
+      assert.deepEqual((await q.where((u) => u.id.notIn(db.queryable(Post).select((p) => p.userId))).toList()).map((u) => u.name), ['carol'])
+      assert.deepEqual((await q.where((u) => u.id.in(db.queryable(Post).where((p) => p.amount.gt('100')).select((p) => p.userId))).toList()).map((u) => u.name), ['alice'])
+      // 标量子查询：金额高于平均值（503.6875）的帖子只有 2000.00 那篇
+      const average = db.queryable(Post).groupBy(() => ({})).select((g) => g.avg((p) => p.amount))
+      assert.deepEqual((await db.queryable(Post).where((p) => p.amount.gt(average)).toList()).map((p) => p.id), [2])
+    })
+
+    it('rejects subqueries that do not select exactly one column', async () => {
+      const { db } = await seeded()
+      await assert.rejects(() => db.queryable(User).where((u) => u.id.in(db.queryable(Post).select((p) => p.userId) as never)).where((u) => u.id.in(db.queryable(Post) as never)).toList(), /exactly one column/)
+    })
+
+    it('filters on window results through a derived table (QUALIFY)', async () => {
+      const { db } = await seeded()
+      const top = db.queryable(Post).select((p) => ({ id: p.id, userId: p.userId, rn: win.rowNumber((w) => w.partitionBy(p.userId).orderBy(p.amount.desc())) })).asTable()
+      // 每个用户金额最高的一篇：alice 的 2000.00（id 2）、bob 的 3.00（id 4）
+      assert.deepEqual((await top.where((t) => t.rn.eq(1)).orderBy((t) => t.id).toList()).map((t) => t.id), [2, 4])
+      assert.equal(await top.where((t) => t.rn.eq(1)).count(), 2)
+      assert.deepEqual((await top.orderBy((t) => t.id).toPage(2, 3)).rows.map((t) => t.id), [4])
+      // 先限制再排序：派生表里的 limit 在外层 orderBy 之前生效
+      const firstTwo = await db.queryable(Post).orderBy((p) => p.id).limit(2).select((p) => ({ id: p.id })).asTable().orderBy((t) => t.id.desc()).toList()
+      assert.deepEqual(firstTwo.map((t) => t.id), [2, 1])
+    })
+
+    it('unions and unionAlls queries, aligning columns by name', async () => {
+      const { db } = await seeded()
+      const adults = db.queryable(User).where((u) => u.age.gt(20)).select((u) => ({ name: u.name, age: u.age }))
+      const minors = db.queryable(User).where((u) => u.age.lt(20)).select((u) => ({ age: u.age, name: u.name }))
+      const both = adults.union(minors)
+      assert.deepEqual((await both.orderBy((r) => r.name.asc()).toList()).map((r) => [r.name, r.age]), [['alice', 30], ['carol', 17]])
+      assert.equal(await both.count(), 2)
+      // UNION 去重，UNION ALL 保留重复
+      assert.equal(await adults.union(adults).count(), 1)
+      assert.equal(await adults.unionAll(adults).count(), 2)
+      // 三个查询接着并（alice、carol、alice），排序后跳过第一行再取两行
+      const three = adults.unionAll(minors).unionAll(adults)
+      assert.deepEqual((await three.orderBy((r) => r.name.asc()).limit(2).offset(1).toList()).map((r) => r.name), ['alice', 'carol'])
+    })
+
+    it('rejects unions whose members differ in columns or carry ordering', async () => {
+      const { db } = await seeded()
+      const names = db.queryable(User).select((u) => ({ name: u.name }))
+      await assert.rejects(async () => names.union(db.queryable(User).select((u) => ({ id: u.id })) as never).toList(), /same columns/)
+      await assert.rejects(async () => db.queryable(User).orderBy((u) => u.id).select((u) => ({ name: u.name })).union(names).toList(), /asTable/)
+    })
+
+    it('registers CTEs and joins them with real entities, chaining one on another', async () => {
+      const { db } = await seeded()
+      const adb = db.with('big', db.queryable(Post).where((p) => p.amount.gt('1')).select((p) => ({ userId: p.userId, amount: p.amount })))
+      // 第二个 CTE 建立在第一个之上；WITH 里按依赖顺序排好，参数也按出现顺序绑定
+      const bdb = adb.with('totals', adb.queryable(adb.entity('big')).groupBy((b) => ({ userId: b.userId })).select((g) => ({ userId: g.key.userId, total: g.sum((b) => b.amount) })))
+      const rows = await bdb.queryable(User)
+        .innerJoin(bdb.entity('totals'), (u, t) => t.userId.eq(u.id))
+        .where((u) => u.name.ne('nobody'))
+        .orderBy((u) => u.id)
+        .select((u, t) => ({ name: u.name, total: t.total }))
+        .toList()
+      assert.deepEqual(rows.map((r) => [r.name, Number(r.total)]), [['alice', 2010.5], ['bob', 4.25]])
+      assert.match(bdb.queryable(bdb.entity('totals')).toSQL().sql, /^WITH .*big.*totals/)
+    })
+
+    it('runs recursive CTEs', { skip: options.recursiveCte === false }, async () => {
+      const { db } = await seeded()
+      // 1 到 5 的序列：锚点是 id = 1 的公司，递归部分每次加 1，到 5 为止
+      const rdb = db.withRecursive('seq',
+        db.queryable(Company).where((c) => c.id.eq(1)).select((c) => ({ n: c.id })),
+        (r, self) => r.queryable(self).where((s) => s.n.lt(5)).select((s) => ({ n: s.n.plus(1) })))
+      assert.deepEqual((await rdb.queryable(rdb.entity('seq')).orderBy((s) => s.n).toList()).map((s) => s.n), [1, 2, 3, 4, 5])
+      // 递归结果还能和真实实体 join
+      const joined = await rdb.queryable(Company).innerJoin(rdb.entity('seq'), (c, s) => s.n.eq(c.id)).select((c) => ({ name: c.name })).toList()
+      assert.deepEqual(joined.map((j) => j.name), ['acme', 'globex'])
     })
   })
 

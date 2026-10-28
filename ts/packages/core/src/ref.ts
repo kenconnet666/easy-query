@@ -2,10 +2,10 @@
  * lambda 里拿到的表引用：`u.name` 是列，`u.company` 是多对一导航（第一次访问时加一个 LEFT JOIN），
  * `u.posts` 是一对多导航（any / count / sum 渲染为关联子查询，toList 在结果里拼成数组）。
  */
-import type { Join, Node, OrderNode, SelectNode } from './ast.ts'
+import type { CteNode, Join, Node, OrderNode, SelectNode, TableRef } from './ast.ts'
 import { aggregate, aggregateCodec, codecs, condNode, Expr, orderNodes, pred, type Cond, type Numeric, type OrderItem, type Pred } from './expr.ts'
 import type { AnySchema, EntityKey, Many, One, Relation } from './relations.ts'
-import type { Row, ValueOf } from './schema.ts'
+import type { Entity, Row, ValueOf } from './schema.ts'
 
 export const REF: unique symbol = Symbol('eqts.ref')
 
@@ -40,13 +40,41 @@ export class Scope {
   readonly allowJoins: boolean
   /** 拦截器给每个表引用附加的条件（主表、JOIN、子查询都用） */
   readonly filters: (ref: AnyRef) => Node[]
+  /** 整条语句用到的 CTE（按依赖顺序），父子 Scope 共用同一张表：WITH 只能出现在最外层 */
+  readonly ctes: Map<string, CteNode>
   private readonly counter: { n: number }
 
-  constructor(schema: AnySchema, counter: { n: number } = { n: 0 }, allowJoins = true, filters: (ref: AnyRef) => Node[] = () => []) {
+  constructor(
+    schema: AnySchema,
+    counter: { n: number } = { n: 0 },
+    allowJoins = true,
+    filters: (ref: AnyRef) => Node[] = () => [],
+    ctes: Map<string, CteNode> = new Map(),
+  ) {
     this.schema = schema
     this.counter = counter
     this.allowJoins = allowJoins
     this.filters = filters
+    this.ctes = ctes
+  }
+
+  /** 登记用到的 CTE；它自己依赖的 CTE 先登记，名字相同的只登记一次 */
+  useCte(cte: CteNode): void {
+    for (const inner of cte.q.ctes ?? []) this.useCte(inner)
+    if (!this.ctes.has(cte.name)) this.ctes.set(cte.name, { ...cte, q: { ...cte.q, ctes: undefined } })
+  }
+
+  /**
+   * 实体在 FROM / JOIN 里的写法：普通表就是表名；派生表是 `(子查询) 别名`；CTE 是名字，并把它登记到最外层的 WITH。
+   * 子查询里用到的 CTE 一并上提，WITH 不能嵌在子查询里。
+   */
+  tableRef(entity: Entity, alias: string): TableRef {
+    const d = entity.derived
+    if (!d) return { table: entity.table, alias }
+    for (const inner of d.q.ctes ?? []) this.useCte(inner)
+    if (d.kind === 'subquery') return { table: '', alias, sub: { ...d.q, ctes: undefined } }
+    this.useCte({ name: entity.table, recursive: d.recursive, columns: d.columns, q: d.q })
+    return { table: entity.table, alias }
   }
 
   nextAlias(): string {
@@ -55,6 +83,11 @@ export class Scope {
 
   /** 子查询用的现场：别名不与外层重复 */
   child(): Scope {
+    return new Scope(this.schema, this.counter, true, this.filters, this.ctes)
+  }
+
+  /** 与本现场共用别名计数、但 CTE 单独统计：toList 的第二条查询是独立的语句，只该带它自己用到的 WITH */
+  detached(): Scope {
     return new Scope(this.schema, this.counter, true, this.filters)
   }
 
@@ -94,7 +127,7 @@ function joinOne(scope: Scope, parent: AnyRef, prop: string, rel: One, parentNul
   const on = allOf(rel.to.map((c, i): Node => ({ k: 'op', op: '=', l: { k: 'col', alias, name: target.columnNames[c]! }, r: columnNode(scope, info, rel.from[i]!) })))
   // 拦截器的条件放进 ON：LEFT JOIN 不会因此把主表的行过滤掉
   const extra = scope.filters(ref)
-  scope.joins.push({ table: target.table, alias, on: extra.length === 0 ? on : { k: 'and', items: [on, ...extra] } })
+  scope.joins.push({ ...scope.tableRef(target, alias), on: extra.length === 0 ? on : { k: 'and', items: [on, ...extra] } })
   return ref
 }
 
@@ -225,7 +258,7 @@ export class ManyRef<S extends AnySchema, K extends EntityKey<S>> {
       if (n) where.push(n)
     }
     const cols = columns(root)
-    return { from: { table: target.table, alias }, joins: scope.joins, where, groupBy: [], having: [], orderBy: [], columns: cols, distinct: false, limit: undefined, offset: undefined, forUpdate: false }
+    return { from: scope.tableRef(target, alias), joins: scope.joins, where, groupBy: [], having: [], orderBy: [], columns: cols, distinct: false, limit: undefined, offset: undefined, forUpdate: false }
   }
 
   /** toList 的子查询用：在新语句里重新求值 filters / orders */

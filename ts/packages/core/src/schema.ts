@@ -1,3 +1,5 @@
+import type { SelectNode } from './ast.ts'
+
 /**
  * 实体与列的定义。列的 TS 类型、是否可空、是否由库生成都记在类型参数里，查询与插入的类型由它推导，不需要代码生成。
  *
@@ -168,6 +170,19 @@ export const col = {
 export type AnyColumn = Column<any, boolean, boolean>
 export type Columns = Record<string, AnyColumn>
 
+/**
+ * 派生实体的来源：不是真实的表，而是一条查询的结果。
+ * subquery 渲染为 `FROM (子查询) 别名`；cte 渲染为最外层的 `WITH 名字 (列) AS (子查询)`，再 `FROM 名字`。
+ */
+export interface DerivedSource {
+  readonly kind: 'subquery' | 'cte'
+  /** 子查询。递归 CTE 要先登记名字才能构建它的递归部分，所以构建完成后才写入这个字段 */
+  q: SelectNode
+  readonly recursive: boolean
+  /** 子查询输出的列名，顺序与 q 的 columns 一致 */
+  readonly columns: readonly string[]
+}
+
 /** 一个实体：名字、表名、列 */
 export interface Entity<Name extends string = string, C extends Columns = Columns> {
   readonly kind: 'entity'
@@ -177,7 +192,13 @@ export interface Entity<Name extends string = string, C extends Columns = Column
   /** 属性名 → 库里的列名 */
   readonly columnNames: { readonly [K in keyof C]: string }
   readonly primaryKey: readonly (keyof C & string)[]
+  /** 派生实体（子查询 / CTE）才有；普通的表没有 */
+  readonly derived?: DerivedSource
 }
+
+/** 一条查询的结果行（Out，列名 → 类型）对应的派生实体的列：值可空的列对应可空列 */
+export type DerivedColumns<Out> = { [P in keyof Out & string]: Column<NonNullable<Out[P]>, null extends Out[P] ? true : false, false> }
+export type DerivedEntity<Name extends string, Out> = Entity<Name, DerivedColumns<Out>>
 
 function snake(name: string): string {
   return name.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase())
