@@ -17,7 +17,7 @@ fork 自 [dromara/easy-query](https://github.com/dromara/easy-query)，软 fork�
 ## 设计决定
 
 - [0001 方言静态入口](decisions/0001-dialect-entry.md)：`MySQL.json(col)…`、能力标记、错方言报错
-- [0002 TS 版设计](decisions/0002-ts-design.md)
+- 0002 TS 版设计：已随 TS 版迁到 [vue-tsx-pro 的 packages/easy-query/docs/decisions/](https://github.com/kenconnet666/vue-tsx-pro/tree/master/packages/easy-query/docs/decisions)
 - [0003 TableNameMapping](decisions/0003-table-name-mapping.md)
 
 ## 特性（Java）
@@ -40,7 +40,7 @@ fork 自 [dromara/easy-query](https://github.com/dromara/easy-query)，软 fork�
 
 ## TS 版
 
-[ts/README.md](../../ts/README.md)：`@zerodep-dev/easy-query-ts` 与 sqlite、mysql、pg、hana 四个适配包。
+2026-10-28 迁到 [vue-tsx-pro](https://github.com/kenconnet666/vue-tsx-pro) 仓库的 `packages/easy-query/`（带历史），包名不变（`@zerodep-dev/easy-query-ts*`）。本仓库只留 Java。
 
 ## 代码在哪
 
@@ -49,22 +49,3 @@ fork 自 [dromara/easy-query](https://github.com/dromara/easy-query)，软 fork�
 - fork 测试：`sql-fork-test`（SQL 文本断言进 CI，`-Plive` 连本地库）
 - 本地测试库：`infra/dev`；上游基线脚本：`tools/upstream-baseline`
 
-## 特性（TS 版，`ts/`）
-
-| 特性 | 页面 |
-|---|---|
-| 根查询聚合、数值算术、批量插入分块 | [ts-aggregates-arithmetic.md](features/ts-aggregates-arithmetic.md) |
-| `caseWhen` 与字符串 / 数学 / 日期 / `cast` 函数 | [ts-functions.md](features/ts-functions.md) |
-| 列类型：decimal.js、64 位整数、`@internationalized/date`、二进制，与 json-wire 对接，扩展点 | [ts-column-types.md](features/ts-column-types.md) |
-| 原生 SQL `db.sql`、执行钩子 `onExecute` | [ts-native-sql-hooks.md](features/ts-native-sql-hooks.md) |
-| `in(子查询)`、派生表 `asTable()`、`union`、CTE 与递归 CTE | [ts-subqueries.md](features/ts-subqueries.md) |
-| 构建与发布（dist、项目引用、publishConfig） | [ts-publish.md](features/ts-publish.md) |
-| 流式读取、取消（`withSignal`）、嵌套事务、`await using`、只读事务 | [ts-runtime.md](features/ts-runtime.md) |
-| 方言能力对齐：eqNullSafe、dateTrunc、行锁、rollup/cube、mapTables、INSERT … SELECT、returning | [ts-dialect-parity.md](features/ts-dialect-parity.md) |
-| 代码优先建表（createTables、列元数据、类型映射） | [ts-ddl.md](features/ts-ddl.md) |
-| 写入补全：save 对象图、returnEntity、批量更新、afterWrite 钩子 | [ts-writes.md](features/ts-writes.md) |
-| 视图 `defineView`（可复用、可嵌套的投影，对应 DTO / VO） | [ts-views.md](features/ts-views.md) |
-| 列修饰器：逻辑删除、乐观锁、默认值、枚举、品牌类型、加密 | [ts-column-rules.md](features/ts-column-rules.md) |
-| 多对多导航（经中间表）与复合外键 | [ts-relations.md](features/ts-relations.md) |
-| 显式 join（innerJoin / leftJoin，多表 lambda、自连接、分组聚合） | [ts-joins.md](features/ts-joins.md) |
-| 独立测试模块 `@zerodep-dev/easy-query-ts-test` | [ts/packages/test/README.md](../../ts/packages/test/README.md) |

@@ -1,6 +1,6 @@
 # easy-query fork 工作约定
 
-本仓库 fork 自 [dromara/easy-query](https://github.com/dromara/easy-query)（remote `upstream`），目标：更好的扩展性、更方便的用法、更多方言能力（含 SAP HANA），以及一版 TS 实现（`ts/`）。
+本仓库 fork 自 [dromara/easy-query](https://github.com/dromara/easy-query)（remote `upstream`），目标：更好的扩展性、更方便的用法、更多方言能力（含 SAP HANA），以及一版 TS 实现（2026-10-28 已迁到 vue-tsx-pro 仓库的 `packages/easy-query/`，本仓库只留 Java）。
 规划在 [docs/fork/ROADMAP.md](docs/fork/ROADMAP.md)，当前进度与待决在 [docs/fork/STATUS.md](docs/fork/STATUS.md)。每次开工先读这两份。
 
 ## 不变的原则
@@ -56,7 +56,3 @@ $env:JAVA_HOME='C:\soft\jdk1.8.0_181'; .\mvnw.cmd -B -o '-Dgpg.skip=true' '-Dmav
 bash tools/upstream-baseline/run.sh
 ```
 
-```powershell
-# TS 版（ts/，Node 24 直接跑 .ts，pnpm）：类型检查（含类型样板）+ SQLite 单测；设了 EQTS_MYSQL_URLS / EQTS_PG_URLS / EQTS_HANA_URL（hana://SYSTEM:密码@127.0.0.1:39041，密码见 .local/db.env）时再跑对应的实库套件
-cd ts; pnpm install; pnpm run typecheck; $env:EQTS_MYSQL_URLS='mysql://root:root@127.0.0.1:3318,mysql://root:root@127.0.0.1:3306'; $env:EQTS_PG_URLS='postgres://postgres:postgres@127.0.0.1:54321/easy-query-test'; pnpm test
-```
