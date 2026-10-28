@@ -23,6 +23,14 @@ describe('sqlite: tenant()', () => {
     assert.deepEqual(s.params, [7, 7, 'x', 7])
   })
 
+  it('puts the tenant condition of an explicitly joined table into its ON clause', () => {
+    // 租户条件放在 ON 里：left join 不会因此丢掉主表的行；主表的租户条件仍在 WHERE
+    const s = db.queryable(Customer).leftJoin(Order, (c, o) => o.customerId.eq(c.id)).select((c, o) => ({ name: c.name, order: o.id })).toSQL()
+    assert.equal(s.sql, 'SELECT t0."name" AS "c0", t1."id" AS "c1" FROM "t_customer" t0'
+      + ' LEFT JOIN "t_order" t1 ON t1."customer_id" = t0."id" AND t1."tenant_id" = ? WHERE t0."tenant_id" = ?')
+    assert.deepEqual(s.params, [7, 7])
+  })
+
   it('evaluates the tenant per statement and fills it on insert', () => {
     current = 8
     assert.deepEqual(db.insert(Order).values({ customerId: 1 } as never).toSQL()[0]!.params, [8, 1])

@@ -84,7 +84,7 @@ P0（日常会撞上，或有正确性风险）：
 - [x] 7.4 `caseWhen` 与函数库：字符串（substring / replace / indexOf / left / right）、数学（abs / round / floor / ceil / mod …）、日期（addDays / diff …）、`nullIf`、`cast`
 - [x] 7.5 原生 SQL 入口 `db.sql\`...\``（返回行 / 受影响行数）
 - [x] 7.6 执行钩子（before / after / error，带耗时与行数），`log` 保留为简写
-- [ ] 7.7 显式 join：`innerJoin / leftJoin / rightJoin(Entity, on)`、导航的 inner 语义、一对多展平
+- [x] 7.7 显式 join：`innerJoin / leftJoin(Entity, on)`，lambda 按 join 顺序收到所有表引用；一对多展平、自连接、分组聚合（右连接与导航的 inner 语义进 BACKLOG）
 - [ ] 7.8 多对多导航（`r.manyToMany`，经中间表）与复合外键（`from / to` 支持列元组）
 - [ ] 7.9 `union / unionAll`、CTE（含递归）、派生表 `from(query)`、`in(子查询)`
 - [ ] 7.10 列修饰器：`$default / $onUpdate / softDelete / version / $type<Brand>() / enum / encrypted / ignore`；逻辑删除把 delete 改写为 update 并给读加过滤

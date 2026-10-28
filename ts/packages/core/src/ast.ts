@@ -40,6 +40,8 @@ export interface TableRef {
 }
 
 export interface Join extends TableRef {
+  /** 连接方式；省略为 left（导航产生的隐式 join 都是 left） */
+  readonly kind?: 'inner' | 'left'
   readonly on: Node
 }
 

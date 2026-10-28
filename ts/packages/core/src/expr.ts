@@ -12,8 +12,8 @@ export const codecs = {
   string: col.string().codec,
 }
 
-/** 与 T 比较时右边可以写的值：值本身或同类型的表达式 */
-export type Operand<T> = NonNullable<T> | Expr<NonNullable<T>> | Expr<T>
+/** 与 T 比较时右边可以写的值：值本身或同类型的表达式；可空的表达式也行（join 条件里 `c.id.eq(u.companyId)`，NULL 不会等于任何值） */
+export type Operand<T> = NonNullable<T> | Expr<NonNullable<T>> | Expr<T> | Expr<NonNullable<T> | null>
 
 /**
  * 第三方数值类型的登记处。@eqts/decimal 之类的扩展包用声明合并把自己的类型加进来，

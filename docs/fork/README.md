@@ -57,4 +57,5 @@ fork 自 [dromara/easy-query](https://github.com/dromara/easy-query)，软 fork�
 | `caseWhen` 与字符串 / 数学 / 日期 / `cast` 函数 | [ts-functions.md](features/ts-functions.md) |
 | 列类型：decimal.js、64 位整数、`@internationalized/date`、二进制，与 json-wire 对接，扩展点 | [ts-column-types.md](features/ts-column-types.md) |
 | 原生 SQL `db.sql`、执行钩子 `onExecute` | [ts-native-sql-hooks.md](features/ts-native-sql-hooks.md) |
+| 显式 join（innerJoin / leftJoin，多表 lambda、自连接、分组聚合） | [ts-joins.md](features/ts-joins.md) |
 | 独立测试模块 `@eqts/test` | [ts/packages/test/README.md](../../ts/packages/test/README.md) |

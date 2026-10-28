@@ -438,6 +438,89 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>, options: L
     })
   })
 
+  describe(`${name}: explicit joins`, () => {
+    it('inner joins two tables and selects from both', async () => {
+      const { db } = await seeded()
+      // carol 没有帖子，内连接里不出现
+      const rows = await db.queryable(User).innerJoin(Post, (u, p) => p.userId.eq(u.id))
+        .orderBy((_u, p) => p.id)
+        .select((u, p) => ({ name: u.name, title: p.title }))
+        .toList()
+      assert.deepEqual(rows.map((r) => [r.name, r.title]), [['alice', 'orm tips'], ['alice', 'sql 100%'], ['bob', 'orm_v2'], ['bob', 'hello']])
+    })
+
+    it('left joins and keeps rows without a match', async () => {
+      const { db } = await seeded()
+      const rows = await db.queryable(User).leftJoin(Post, (u, p) => p.userId.eq(u.id))
+        .orderBy((u, p) => [u.id, p.id])
+        .select((u, p) => ({ name: u.name, title: p.title }))
+        .toList()
+      assert.equal(rows.length, 5)
+      assert.deepEqual(rows.at(-1), { name: 'carol', title: null })
+    })
+
+    it('returns whole rows grouped by entity name when nothing is selected', async () => {
+      const { db } = await seeded()
+      const rows = await db.queryable(User).leftJoin(Post, (u, p) => p.userId.eq(u.id)).orderBy((u, p) => [u.id, p.id]).toList()
+      assert.equal(rows[0]!.User.name, 'alice')
+      assert.equal(rows[0]!.Post?.title, 'orm tips')
+      // left join 没匹配上时整行是 null，而不是一行全是 null 的对象
+      assert.equal(rows.at(-1)!.User.name, 'carol')
+      assert.equal(rows.at(-1)!.Post, null)
+    })
+
+    it('joins three tables, filters on joined tables and pages', async () => {
+      const { db } = await seeded()
+      const q = db.queryable(User)
+        .innerJoin(Post, (u, p) => p.userId.eq(u.id))
+        .innerJoin(Comment, (_u, p, c) => c.postId.eq(p.id))
+        .where((u, _p, c) => [u.name.eq('alice'), c.body.like('n')])
+        .orderBy((_u, _p, c) => c.id)
+      // 'nice' 与 'thanks' 都含 n，都挂在 alice 的第 1 篇帖子上
+      assert.deepEqual((await q.select((_u, p, c) => ({ title: p.title, body: c.body })).toList()).map((r) => r.body), ['nice', 'thanks'])
+      assert.equal(await q.count(), 2)
+      assert.equal((await q.select((u) => ({ id: u.id })).toPage(1, 1)).total, 2)
+    })
+
+    it('uses navigations of a joined table', async () => {
+      const { db } = await seeded()
+      // p.user 是 Post 上的多对一导航，隐式 join 排在显式 join 之后
+      const rows = await db.queryable(User).innerJoin(Post, (u, p) => p.userId.eq(u.id))
+        .where((_u, p) => p.user.name.eq('bob'))
+        .select((_u, p) => ({ title: p.title, owner: p.user.name }))
+        .toList()
+      assert.deepEqual(rows.map((r) => r.owner), ['bob', 'bob'])
+    })
+
+    it('groups and aggregates across joined tables', async () => {
+      const { db } = await seeded()
+      const rows = await db.queryable(User).innerJoin(Post, (u, p) => p.userId.eq(u.id))
+        .groupBy((u) => ({ name: u.name }))
+        .orderBy((g) => g.key.name.asc())
+        .select((g) => ({ name: g.key.name, posts: g.count(), total: g.sum((_u, p) => p.amount) }))
+        .toList()
+      assert.deepEqual(rows.map((r) => [r.name, r.posts, Number(r.total)]), [['alice', 2, 2010.5], ['bob', 2, 4.25]])
+      assert.equal(Number(await db.queryable(User).innerJoin(Post, (u, p) => p.userId.eq(u.id)).where((u) => u.name.eq('bob')).sum((_u, p) => p.amount)), 4.25)
+    })
+
+    it('joins the same entity twice only when columns are named by select', async () => {
+      const { db } = await seeded()
+      // 自连接：同公司的不同用户配对
+      const pairs = await db.queryable(User).innerJoin(User, (a, b) => [b.companyId.eq(a.companyId), b.id.ne(a.id)])
+        .orderBy((a, b) => [a.id, b.id])
+        .select((a, b) => ({ a: a.name, b: b.name }))
+        .toList()
+      assert.deepEqual(pairs, [{ a: 'alice', b: 'bob' }, { a: 'bob', b: 'alice' }])
+      await assert.rejects(() => db.queryable(User).innerJoin(User, (a, b) => b.id.eq(a.id)).toList(), /more than once/)
+    })
+
+    it('rejects joins after select and joins without a condition', async () => {
+      const { db } = await seeded()
+      assert.throws(() => db.queryable(User).select((u) => ({ id: u.id })).innerJoin(Post, (u, p) => p.userId.eq(u.id)), /before select/)
+      await assert.rejects(() => db.queryable(User).innerJoin(Post, () => undefined).toList(), /ON condition/)
+    })
+  })
+
   describe(`${name}: native SQL and execution hooks`, () => {
     it('runs db.sql with bound values, expanded arrays and quoted identifiers', async () => {
       const { db } = await seeded()
