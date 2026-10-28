@@ -26,7 +26,7 @@ export class MySqlDialect extends Dialect {
    * mysql2 的 query 在客户端把参数插进 SQL：bigint 会被写成带引号的字符串，`BIGINT + '1'` 在 MySQL 里按 DOUBLE 运算，
    * 超过 2^53 的值就丢精度。bigint 只含数字和负号，直接写成整数字面量；二进制统一成 Buffer（mysql2 只认 Buffer）。
    */
-  protected override bindParam(value: unknown, w: SqlWriter): string {
+  override bindParam(value: unknown, w: SqlWriter): string {
     if (typeof value === 'bigint') return value.toString()
     return super.bindParam(value instanceof Uint8Array && !Buffer.isBuffer(value) ? Buffer.from(value) : value, w)
   }

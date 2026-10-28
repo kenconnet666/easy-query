@@ -98,3 +98,17 @@ describe('sqlite: SQL text', async () => {
     assert.equal(statements[0]!.sql, 'SELECT SUM(t0."amount") AS "c0" FROM "t_post" t0')
   })
 })
+
+describe('sqlite: native SQL', async () => {
+  const { db, statements } = await memoryDb()
+
+  it('binds values, expands arrays and quotes identifiers', async () => {
+    await db.sql`SELECT ${1} FROM ${db.sql.ident('t_user')} WHERE name IN (${['a', 'b']}) AND age > ${null}`
+    assert.deepEqual(statements.at(-1), { sql: 'SELECT ? FROM "t_user" WHERE name IN (?, ?) AND age > ?', params: [1, 'a', 'b', null] })
+  })
+
+  it('encodes dates and booleans like the builders do', async () => {
+    await db.sql`SELECT ${new Date('2026-01-02T03:04:05.006Z')}, ${true}`
+    assert.deepEqual(statements.at(-1)!.params, ['2026-01-02 03:04:05.006', 1])
+  })
+})

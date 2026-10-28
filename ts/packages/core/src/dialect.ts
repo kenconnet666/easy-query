@@ -102,7 +102,7 @@ export abstract class Dialect {
   }
 
   /** 把编码后的参数绑定进语句，返回它在 SQL 里的写法；默认是占位符。驱动不能可靠传递的值（见 MySQL 的 bigint）可以覆盖成字面量 */
-  protected bindParam(value: unknown, w: SqlWriter): string {
+  bindParam(value: unknown, w: SqlWriter): string {
     return w.bind(this, value)
   }
 

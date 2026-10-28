@@ -3,7 +3,7 @@
  */
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { and, caseWhen, createDb, or, touch, win, type Expr, type Interceptor } from '@eqts/core'
+import { and, caseWhen, createDb, or, touch, win, type Expr, type ExecutionEvent, type Interceptor } from '@eqts/core'
 import { CalendarDateTime, fromDate, parseDate, Time } from '@internationalized/date'
 import { Decimal } from 'decimal.js'
 import { Comment, Company, Ext, Post, schema, seed, User, type TestEnv } from './fixture.ts'
@@ -435,6 +435,39 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>, options: L
       await db.insert(Ext).values(row('1.00', 1n)).execute()
       const r = await db.queryable(Ext).select((e) => ({ plus: e.day.addDays(30).month(), diff: e.day.diffDays(parseDate('2025-12-31')) })).single()
       assert.deepEqual(r, { plus: 2, diff: 2 })
+    })
+  })
+
+  describe(`${name}: native SQL and execution hooks`, () => {
+    it('runs db.sql with bound values, expanded arrays and quoted identifiers', async () => {
+      const { db } = await seeded()
+      // 标识符都用 ident：各库的引号不同，HANA 里不加引号的名字还会被折成大写
+      const t = db.sql.ident
+      const rows = await db.sql`SELECT COUNT(*) FROM ${t('t_user')} WHERE ${t('age')} > ${20} AND ${t('name')} IN (${['alice', 'bob']})`
+      assert.equal(Number(Object.values(rows[0]!)[0]), 1)
+      const affected = await db.sql.execute`UPDATE ${t('t_post')} SET ${t('title')} = ${'renamed'} WHERE ${t('id')} IN (${[1, 2]})`
+      assert.equal(affected, 2)
+      assert.equal(await db.queryable(Post).where((p) => p.title.eq('renamed')).count(), 2)
+    })
+
+    it('rejects undefined values and empty arrays instead of sending a broken statement', async () => {
+      const { db } = await seeded()
+      await assert.rejects(() => db.sql`SELECT ${undefined}`, /undefined/)
+      await assert.rejects(() => db.sql`SELECT 1 WHERE 1 IN (${[]})`, /empty/)
+    })
+
+    it('reports every statement to onExecute, with rows, duration and errors', async () => {
+      const env = await seeded()
+      const events: ExecutionEvent[] = []
+      const db = createDb({ schema, adapter: env.adapter, onExecute: (e) => events.push(e) })
+      await db.queryable(User).toList()
+      await db.delete(Post).where((p) => p.id.eq(1)).execute()
+      await assert.rejects(() => db.sql`SELECT * FROM ${db.sql.ident('eqts_no_such_table')}`)
+      // 事务里的语句也经过同一个钩子
+      await db.transaction(async (tx) => { await tx.queryable(Company).count() })
+      assert.deepEqual(events.slice(0, 3).map((e) => [e.kind, e.rows, e.error === undefined]), [['query', 3, true], ['execute', 1, true], ['query', 0, false]])
+      assert.ok(events.every((e) => e.durationMs >= 0))
+      assert.ok(events.length >= 4 && events.some((e) => e.statement.sql.includes('COUNT')))
     })
   })
 
