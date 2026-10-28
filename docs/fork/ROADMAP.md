@@ -74,9 +74,9 @@ M3b：
 
 ## M6 成熟收尾
 
-- [ ] 合并上游、全量构建、上游基线对比
-- [ ] 文档索引 `docs/fork/README.md`
-- [ ] 列出可回馈上游的分支与说明（由用户去开上游 PR）
+- [x] 合并上游、全量构建、上游基线对比（2026-10-28：上游无新提交，全量构建通过；基线沿用 M3b 那次）
+- [x] 文档索引 `docs/fork/README.md`；交接 `HANDOFF.md`
+- [x] 列出可回馈上游的分支与说明（`upstream-candidates.md`，由用户去开上游 PR）
 
 ## flow 验收（M3a 起，详见 [flow.md](flow.md)）
 
