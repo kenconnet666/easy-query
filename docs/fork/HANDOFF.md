@@ -26,7 +26,7 @@
    bash infra/dev/db.sh --profile hana up -d     # HANA 2.0（镜像约十几 GB，内存至少 8 GB）
    ```
    端口：MySQL 3306 / 3316，8.0.18 在 3318，PG 54321，Redis 55000，HANA 39041。上游基线需要的库和表见 [baseline.md](baseline.md)"准备实库"一节。
-3. Node 24 与 pnpm 11（TS 版，`cd ts && pnpm install`）。
+3. （TS 版已于 2026-10-28 迁到 [vue-tsx-pro](https://github.com/kenconnet666/vue-tsx-pro) 仓库的 `packages/easy-query/`，本仓库只留 Java。）
 4. 全量构建（JDK 8，见仓库根 CLAUDE.md"常用命令"），确认 fork 测试全过；再按需 `-Plive` 跑实库用例。
 
 ## 约定提醒

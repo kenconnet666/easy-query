@@ -63,9 +63,9 @@ M3b：
 - [x] 4.2 PG：jsonb 条件与 `edit`（jsonb_set / #- / ||）、`PgSQL.array`（ANY / cardinality）、`PgSQL.fulltext`（websearch_to_tsquery / ts_rank）；PG 17 实测
 - [x] 4.3 MySQL / PolarDB：JSON 条件（contains、overlaps、hasMember、containsPath）与修改（`edit` → JSON_SET / JSON_REMOVE / JSON_ARRAY_APPEND），全文 `MySQL.match`（M1）；8.0.18 实测。JSON_TABLE / JSON_SEARCH 与 PolarDB 专属语法进 BACKLOG
 
-## M5 TS 版（本仓库 `ts/`，pnpm workspace；不追求与 Java 生成逐字相同的 SQL，只共享概念与命名）
+## M5 TS 版（2026-10-28 已迁到 vue-tsx-pro 仓库的 `packages/easy-query/`；原在本仓库 `ts/`，pnpm workspace；不追求与 Java 生成逐字相同的 SQL，只共享概念与命名）
 
-- [x] T0 设计文档 [decisions/0002-ts-design.md](decisions/0002-ts-design.md) 与类型样板：50 实体 / 5 层导航 tsc 0.15s，无 TS2589；结果类型正例与负例固定在 `ts/packages/test/test/*.check.ts`
+- [x] T0 设计文档 [0002-ts-design.md](https://github.com/kenconnet666/vue-tsx-pro/blob/master/packages/easy-query/docs/decisions/0002-ts-design.md) 与类型样板：50 实体 / 5 层导航 tsc 0.15s，无 TS2589；结果类型正例与负例固定在 `ts/packages/test/test/*.check.ts`
 - [x] T1 核心 AST + SQLite（node:sqlite，零基础设施）+ MySQL（mysql2，8.0.18 与 8.4 实测）：CRUD、where/select/orderBy/分页、分组、事务、写入无条件保护
 - [x] T2 导航：隐式 join（可空推导）、隐式子查询（any/none/count/sum/avg/max/min）、toList 对象树（每层一条 IN 查询）、include
 - [x] T3 方言静态入口 `MySQL / Pg / Hana`、按主键整行更新 `update(X).entity(row)`；PG 适配 `@zerodep-dev/easy-query-ts-pg`；HANA 适配 `@zerodep-dev/easy-query-ts-hana`（hdb，HANA 2.0 实测）；拦截器 tenant / touch / 自定义；upsert onConflict merge / ignore；窗口函数 `win.*`；toList `limit(n)` / `first()`——SQLite、MySQL 8.0.18 / 8.4、PG 17、HANA 2.0 共 147 个用例实测
