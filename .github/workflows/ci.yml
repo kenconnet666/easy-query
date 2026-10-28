@@ -81,6 +81,7 @@ jobs:
           cache-dependency-path: ts/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm run typecheck
+      - run: pnpm run build
       - run: pnpm test
         env:
           EQTS_MYSQL_URLS: mysql://root:root@127.0.0.1:3306

@@ -5,7 +5,7 @@
  * ```
  * 适配器自带一个小连接池（hdb 一个 client 就是一条连接）。自增主键在同一条连接上用 CURRENT_IDENTITY_VALUE() 取回。
  */
-import hdb, { type Client, type ClientOptions } from 'hdb'
+import hdb, { type Client } from 'hdb'
 import { hanaFunctions } from './functions.ts'
 import { Dialect, SqlWriter, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type InsertNode, type Session, type TransactionOptions } from '@eqts/core'
 
@@ -120,7 +120,16 @@ const ISOLATION = {
   serializable: 'SERIALIZABLE',
 } as const
 
-export interface HanaOptions extends ClientOptions {
+/** hdb 连接参数（hdb 自己没有类型，这里声明用到的字段；其余原样传给 hdb） */
+export interface HdbClientOptions {
+  host: string
+  port: number
+  user: string
+  password: string
+  [option: string]: unknown
+}
+
+export interface HanaOptions extends HdbClientOptions {
   /** 连接后 SET SCHEMA */
   schema?: string
   /** 连接池上限，默认 5 */

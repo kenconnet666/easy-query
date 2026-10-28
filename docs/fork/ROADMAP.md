@@ -88,7 +88,7 @@ P0（日常会撞上，或有正确性风险）：
 - [x] 7.8 多对多导航（`r.manyToMany`，经中间表）与复合外键（`from / to` 支持列元组）
 - [x] 7.9 `union / unionAll`、CTE（含递归）、派生表 `from(query)`、`in(子查询)`
 - [x] 7.10 列修饰器：`$default / $onUpdate / softDelete / version / $type<Brand>() / enum / encrypted / insertOnly`（`ignore` 不做：TS 版实体与表一一对应）；逻辑删除把 delete 改写为 update 并给读加过滤
-- [ ] 7.11 构建与发布：tsc 产出 `dist/*.js` + `.d.ts`，`exports` 指向 dist（Node 不对 `node_modules` 里的 `.ts` 做类型剥离，现在不能当 npm 包用）
+- [x] 7.11 构建与发布：tsc 产出 `dist/*.js` + `.d.ts`，`exports` 指向 dist（Node 不对 `node_modules` 里的 `.ts` 做类型剥离，现在不能当 npm 包用）
 - [x] 7.19 扩展列类型：`@eqts/decimal`（decimal.js）、`@eqts/date`（`@internationalized/date`）、`col.bytes()`、精确的 64 位整数；`NumericExtensions` / `TemporalExtensions` 声明合并扩展点，`ColumnKind` 开放；与 json-wire 的种类表一一对应并做过端到端往返检查（vue-tsx-pro 的日期组件用同一批类）
 
 P1（能力对齐）：

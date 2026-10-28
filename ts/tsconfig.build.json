@@ -1,0 +1,13 @@
+{
+  // pnpm run build：按依赖顺序构建所有要发布的包
+  "files": [],
+  "references": [
+    { "path": "packages/core/tsconfig.build.json" },
+    { "path": "packages/sqlite/tsconfig.build.json" },
+    { "path": "packages/mysql/tsconfig.build.json" },
+    { "path": "packages/pg/tsconfig.build.json" },
+    { "path": "packages/hana/tsconfig.build.json" },
+    { "path": "packages/decimal/tsconfig.build.json" },
+    { "path": "packages/date/tsconfig.build.json" }
+  ]
+}

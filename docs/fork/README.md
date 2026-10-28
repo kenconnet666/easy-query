@@ -58,6 +58,7 @@ fork 自 [dromara/easy-query](https://github.com/dromara/easy-query)，软 fork�
 | 列类型：decimal.js、64 位整数、`@internationalized/date`、二进制，与 json-wire 对接，扩展点 | [ts-column-types.md](features/ts-column-types.md) |
 | 原生 SQL `db.sql`、执行钩子 `onExecute` | [ts-native-sql-hooks.md](features/ts-native-sql-hooks.md) |
 | `in(子查询)`、派生表 `asTable()`、`union`、CTE 与递归 CTE | [ts-subqueries.md](features/ts-subqueries.md) |
+| 构建与发布（dist、项目引用、publishConfig） | [ts-publish.md](features/ts-publish.md) |
 | 列修饰器：逻辑删除、乐观锁、默认值、枚举、品牌类型、加密 | [ts-column-rules.md](features/ts-column-rules.md) |
 | 多对多导航（经中间表）与复合外键 | [ts-relations.md](features/ts-relations.md) |
 | 显式 join（innerJoin / leftJoin，多表 lambda、自连接、分组聚合） | [ts-joins.md](features/ts-joins.md) |

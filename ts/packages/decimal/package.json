@@ -3,8 +3,30 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": { "@eqts/core": "workspace:*" },
-  "peerDependencies": { "decimal.js": "^10.6.0" },
-  "devDependencies": { "decimal.js": "10.6.0" }
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts"
+  },
+  "dependencies": {
+    "@eqts/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "decimal.js": "^10.6.0"
+  },
+  "devDependencies": {
+    "decimal.js": "10.6.0"
+  }
 }
