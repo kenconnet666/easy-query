@@ -1,5 +1,5 @@
 export { col, entity, toDate, toDateText, utcText, Column } from './schema.ts'
-export type { Codec, ColumnKind, ColumnOptions, DecimalText, Entity, Insert, Row, StandardSchema, Update, ValueOf } from './schema.ts'
+export type { Codec, ColumnKind, ColumnOptions, DateText, DecimalText, Entity, Insert, Row, StandardSchema, Update, ValueOf } from './schema.ts'
 export { defineSchema } from './relations.ts'
 export type { AnySchema, EntityKey, Many, One, Relation, RelationBuilder, Schema } from './relations.ts'
 export { and, caseWhen, CaseBuilder, codecs, dialectFn, Expr, isSubquery, not, or, Order, SUBQUERY, sql } from './expr.ts'

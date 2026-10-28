@@ -182,7 +182,7 @@ ts/
   TypeScript 7.0.2：Check time 0.15s、Instantiations 7.9 万、无 `TS2589`、无循环推导错误。
 - `packages/test/test/types.check.ts`：结果类型的正例（Equal 断言）与负例（`@ts-expect-error`）：用错列类型比较、对数字列调用 like、不存在的列、一对多导航直接取列、
   实体不在 schema 里、insert 缺必填列或类型不对、set 类型不对、关系的 from 列或目标实体写错。
-- 已知的类型精度边界：`date` 列是文字，所以 `year()` 也允许在字符串列上调用。
+- 类型精度：`date` 列现在是 `DateText`（模板字面量类型），字符串列不能再调用 `year()` 等（M7.13 已改）。
 
 ## 实现时的调整（相对草案）
 

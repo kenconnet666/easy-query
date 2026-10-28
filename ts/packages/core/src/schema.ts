@@ -171,6 +171,12 @@ export class Column<T, N extends boolean = false, O extends boolean = false> {
  */
 export type DecimalText = `${number}`
 
+/**
+ * 日历日期文字 'YYYY-MM-DD'：date 列在 JS 里的类型。同样用模板字面量类型，`'2026-01-02'` 可以直接写入，
+ * 而普通字符串列不能调用 year() / month() / dateTrunc() 这类日期方法。
+ */
+export type DateText = `${number}-${number}-${number}`
+
 const SAFE_MAX = BigInt(Number.MAX_SAFE_INTEGER)
 
 function codec<T>(kind: ColumnKind, decode: (raw: unknown) => T, encode: (value: T) => unknown = (v) => v): Codec<T> {
@@ -281,7 +287,7 @@ export const col = {
   /** 绑定时交给方言转换（SQLite / MySQL 写 1 / 0，PG 原样传布尔） */
   boolean: () => base(codec<boolean>('boolean', (r) => r === true || r === 1 || r === '1' || r === 1n || r === 't')),
   /** 日历日期 'YYYY-MM-DD'，不经过时区 */
-  date: () => base(codec<string>('date', toDateText)),
+  date: () => base(codec<DateText>('date', (r) => toDateText(r) as DateText)),
   /** 一天里的时刻 'HH:MM:SS' */
   time: () => base(codec<string>('time', (r) => String(r).slice(0, 8))),
   /** 时刻：JS 的 Date，库里按 UTC 存 */

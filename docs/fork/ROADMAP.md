@@ -93,7 +93,7 @@ P0（日常会撞上，或有正确性风险）：
 
 P1（能力对齐）：
 - [x] 7.12 `defineView`：可复用、可嵌套的投影（对应 Java 的 DTO / VO）
-- [ ] 7.13 `Expr` 类型门面：用条件类型交叉让补全只列出适用的方法；date 列改模板字面量类型
+- [x] 7.13 date 列改模板字面量类型 `${number}-${number}-${number}`（字符串列不能再调 year() 等）；"补全只列适用方法"的 `Expr` 类型门面评估后不做，原因见 BACKLOG
 - [x] 7.14 流式读取（`for await`）、`AbortSignal`、`await using` 事务、savepoint 嵌套事务、只读事务
 - [x] 7.15 方言能力对齐 Java M3b：`rollup / cube / grouping`、`eqNullSafe`、`dateTrunc`、`forUpdateNoWait / SkipLocked`、`INSERT … SELECT`、表名映射、通用 `returning`
 - [x] 7.16 代码优先 DDL：schema → `CREATE TABLE`（与 T4 `pull` 互补）；`decimal(p, s)` 的精度要先留在列元数据里

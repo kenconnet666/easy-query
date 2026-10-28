@@ -4,7 +4,7 @@
 
 ## 当前
 
-- M7（TS 版补全，见 ROADMAP）进行中。PR #29（`feat/ts-m7-core-gaps`）：7.0–7.6、7.19；叠在它上面的分支 `feat/ts-m7-joins`：7.7 显式 join。均在 SQLite、MySQL 8.0.18 / 8.4、PG 17 实测（231 个用例）。HANA 不在本机验证，靠 CI/CD：新增写法在 CI 跑过之前**未实库验证**（现有 ci.yml 的 ts job 没有 HANA 步骤）。下一批：7.8 多对多与复合外键、7.9 union / CTE、7.10 列修饰器（逻辑删除 / 乐观锁）、7.11 构建发布。
+- M7（TS 版补全，见 ROADMAP）**全部完成**，在 SQLite、MySQL 8.0.18 / 8.4、PG 17 上实测（418 个用例，类型检查与 `pnpm run build` 通过）。PR #29（7.0–7.6、7.19）与 #30（7.7 显式 join）已开；7.8–7.18、7.13 在本地叠加分支 `feat/ts-m7-relations` → … → `feat/ts-m7-expr-facade`（线性叠加，尚未推送）。HANA 不在本机验证，靠 CI/CD：新增写法在 CI 跑过之前**未实库验证**（现有 ci.yml 的 ts job 没有 HANA 步骤）。7.13 的"补全门面"评估后不做（见 BACKLOG）。
 - M6 收尾完成：文档索引 `README.md`、交接 `HANDOFF.md`（换机器先读）、回馈上游清单 `upstream-candidates.md`。
 - flow 验收分支 `eq-fork-acceptance`（本地，不推送）：每个工作项前 fetch 并 merge flow 的 origin/master。
 

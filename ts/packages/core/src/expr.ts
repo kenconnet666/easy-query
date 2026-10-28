@@ -3,7 +3,7 @@
  * 只适用于某些类型的方法用 `this` 参数限定（例如 like 只能在字符串上调用），用错在编译期报错。
  */
 import type { AggregateFn, BinaryOp, Node, OrderNode, SelectNode } from './ast.ts'
-import { col, type Codec, type DecimalText } from './schema.ts'
+import { col, type Codec, type DateText, type DecimalText } from './schema.ts'
 
 export const codecs = {
   int: col.int().codec,
@@ -46,8 +46,8 @@ export interface TemporalExtensions {}
 /** 可以做算术与 sum / avg 的值类型 */
 export type Numeric = number | bigint | DecimalText | NumericExtensions[keyof NumericExtensions]
 
-/** 可以取年 / 月 / 日的值类型（string 是 date 列的 'YYYY-MM-DD'，精确区分留给后续的 Expr 类型门面） */
-export type Temporal = Date | string | TemporalExtensions[keyof TemporalExtensions]
+/** 可以取年 / 月 / 日、加减天数、截断的值类型：Date、date 列的 'YYYY-MM-DD'（DateText）、以及扩展包登记的日期时间类型 */
+export type Temporal = Date | DateText | TemporalExtensions[keyof TemporalExtensions]
 
 /**
  * 算术右操作数：与左边同类型的值或表达式。
@@ -273,7 +273,7 @@ export interface CastTypes {
   bigint: number
   double: number
   decimal: DecimalText
-  date: string
+  date: DateText
   datetime: Date
 }
 

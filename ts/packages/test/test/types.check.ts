@@ -190,3 +190,15 @@ async function views() {
 void views
 // @ts-expect-error 视图属于 User，不能用在 Post 的查询上
 db.queryable(Post).select(UserCard)
+
+// date 列是 'YYYY-MM-DD' 文字：可以取年月日，普通字符串列不行
+const Person = entity('t_person', { id: col.bigint().primaryKey().generated(), name: col.string(), born: col.date() })
+const personDb = createDb({ schema: defineSchema({ Person }), adapter })
+personDb.queryable(Person).where((p) => [p.born.year().eq(1990), p.born.ge('1990-01-01'), p.born.addDays(1).ge('1990-01-02')])
+expect<Equal<Row<typeof Person>['born'], `${number}-${number}-${number}`>>()
+personDb.queryable(Person).where((p) => [
+  // @ts-expect-error 字符串列不是日期，不能取年份
+  p.name.year().eq(1990),
+  // @ts-expect-error 不是 'YYYY-MM-DD' 形状的字面量
+  p.born.ge('not a date'),
+])

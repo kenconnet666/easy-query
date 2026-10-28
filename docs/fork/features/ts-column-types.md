@@ -75,3 +75,7 @@ const Account = entity('t_account', { id: col.bigint().primaryKey().generated(),
 - 只依赖协议里的 `~standard.validate`（核心不引入任何校验库，接口在 `@eqts/core` 里以 `StandardSchema` 导出）；**校验器必须是同步的**，异步的会明确报错。
 - 只写泛型的 `col.json<Tags>()` 仍然可用，不做运行时校验。
 - 用 zod 4.6.7 验证过（zod 只是测试的开发依赖）。
+
+## date 列的类型
+
+`col.date()` 在 JS 里是 `DateText`（`` `${number}-${number}-${number}` ``，即 `'2026-01-02'` 这种形状的文字）：字面量可以直接写入和比较，**普通字符串列不能调用 `year() / month() / day() / addDays() / dateTrunc()`**，写成 `'not a date'` 也会编译不过。要对象形式用 `@eqts/date` 的 `calendarDate()`。

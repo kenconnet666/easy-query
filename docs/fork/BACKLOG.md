@@ -20,3 +20,4 @@
 - [M4.1] HANA 层级函数（HIERARCHY 生成器 + HIERARCHY_DESCENDANTS 等）、表函数与计算视图传参（`"view"(PLACEHOLDER."$$p$$" => ?)`）：都是 FROM 里的表来源而不是列函数，要扩展表来源 API，等有具体用例再做；LINGUISTIC 检索模式未包装
 - [M7.7] TS `rightJoin`（之前所有表的列都变可空，类型要整串重算）与导航的 inner 语义（`u.company` 强制内连接）：现在对调表顺序写 leftJoin、或显式 innerJoin 即可
 - [M7.9] TS 派生表不能再 join 真实实体（CTE 可以）；HANA 层级查询（HIERARCHY 函数）替代递归 CTE
+- [M7.13] TS `Expr` 类型门面（补全只列适用的方法）：要把 `Expr<T>` 拆成"实现类 + 条件交叉类型"，`Selected`、`groupBy` 的键、`orderBy`、窗口、聚合、`Operand`、`Subquery` 等十几处签名都得跟着改，条件类型还会拖慢 50 实体的类型样板；现有的 `this` 参数限定已经能在编译期拦住误用，只是补全列表里仍会出现不适用的方法。等 TS 对 `this` 参数在补全里的过滤有改进，或确有人受不了时再做
