@@ -6,11 +6,13 @@ import { describe, it } from 'node:test'
 import { and, caseWhen, createDb, or, touch, win, type Expr, type ExecutionEvent, type Interceptor } from '@eqts/core'
 import { CalendarDateTime, fromDate, parseDate, Time } from '@internationalized/date'
 import { Decimal } from 'decimal.js'
-import { Comment, Company, Ext, Post, schema, seed, User, type TestEnv } from './fixture.ts'
+import { Comment, Company, Ext, Member, Note, Post, Role, schema, seed, User, UserRole, type TestEnv } from './fixture.ts'
 
 export interface LiveSuiteOptions {
   /** 库里建了 t_ext 表，可以跑 decimal.js / bigint / @internationalized/date 的往返用例 */
   readonly extensionTypes?: boolean
+  /** 库里建了 t_role / t_user_role / t_member / t_note，可以跑多对多与复合外键的用例 */
+  readonly extraTables?: boolean
 }
 
 export function liveSuite(name: string, open: () => Promise<TestEnv>, options: LiveSuiteOptions = {}): void {
@@ -435,6 +437,72 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>, options: L
       await db.insert(Ext).values(row('1.00', 1n)).execute()
       const r = await db.queryable(Ext).select((e) => ({ plus: e.day.addDays(30).month(), diff: e.day.diffDays(parseDate('2025-12-31')) })).single()
       assert.deepEqual(r, { plus: 2, diff: 2 })
+    })
+  })
+
+  describe(`${name}: many-to-many and composite relations`, { skip: !options.extraTables }, () => {
+    /** alice: admin + dev；bob: dev；carol 没有角色 */
+    const withRoles = async () => {
+      const env = await seeded()
+      const { db } = env
+      await db.insert(Role).values([{ name: 'admin' }, { name: 'dev' }, { name: 'ops' }]).execute()
+      await db.insert(UserRole).values([{ userId: 1, roleId: 1 }, { userId: 1, roleId: 2 }, { userId: 2, roleId: 2 }]).execute()
+      return env
+    }
+
+    it('filters and counts through the junction table', async () => {
+      const { db } = await withRoles()
+      const names = (rows: { name: string }[]) => rows.map((r) => r.name)
+      const q = db.queryable(User).orderBy((u) => u.id)
+      assert.deepEqual(names(await q.where((u) => u.roles.any((r) => r.name.eq('dev'))).toList()), ['alice', 'bob'])
+      assert.deepEqual(names(await q.where((u) => u.roles.any((r) => r.name.eq('admin'))).toList()), ['alice'])
+      assert.deepEqual(names(await q.where((u) => u.roles.none((r) => r.name.eq('admin'))).toList()), ['bob', 'carol'])
+      const counts = await q.select((u) => ({ name: u.name, roles: u.roles.count() })).toList()
+      assert.deepEqual(counts.map((c) => [c.name, c.roles]), [['alice', 2], ['bob', 1], ['carol', 0]])
+    })
+
+    it('builds object trees through the junction table, with per-parent limits', async () => {
+      const { db } = await withRoles()
+      const rows = await db.queryable(User).orderBy((u) => u.id).select((u) => ({
+        name: u.name,
+        roles: u.roles.orderBy((r) => r.name).toList((r) => ({ name: r.name })),
+        first: u.roles.orderBy((r) => r.name.desc()).first((r) => ({ name: r.name })),
+      })).toList()
+      assert.deepEqual(rows, [
+        { name: 'alice', roles: [{ name: 'admin' }, { name: 'dev' }], first: { name: 'dev' } },
+        { name: 'bob', roles: [{ name: 'dev' }], first: { name: 'dev' } },
+        { name: 'carol', roles: [], first: null },
+      ])
+    })
+
+    it('works from the other side too', async () => {
+      const { db } = await withRoles()
+      const rows = await db.queryable(Role).orderBy((r) => r.id).select((r) => ({ name: r.name, users: r.users.orderBy((u) => u.id).toList((u) => ({ name: u.name })) })).toList()
+      assert.deepEqual(rows, [
+        { name: 'admin', users: [{ name: 'alice' }] },
+        { name: 'dev', users: [{ name: 'alice' }, { name: 'bob' }] },
+        { name: 'ops', users: [] },
+      ])
+    })
+
+    it('matches composite foreign keys on every column', async () => {
+      const { db } = await seeded()
+      // m1 与 m3 的 id 相同、租户不同：只比较 id 会把租户 2 的笔记算到 m1 头上
+      await db.insert(Member).values([{ tenantId: 1, id: 1, name: 'm1' }, { tenantId: 1, id: 2, name: 'm2' }, { tenantId: 2, id: 1, name: 'm3' }]).execute()
+      await db.insert(Note).values([
+        { tenantId: 1, memberId: 1, body: 'a' }, { tenantId: 1, memberId: 1, body: 'b' },
+        { tenantId: 2, memberId: 1, body: 'c' }, { tenantId: 1, memberId: 2, body: 'd' },
+      ]).execute()
+      const members = await db.queryable(Member).orderBy((m) => [m.tenantId, m.id]).select((m) => ({
+        name: m.name,
+        count: m.notes.count(),
+        notes: m.notes.orderBy((n) => n.body).toList((n) => ({ body: n.body })),
+      })).toList()
+      assert.deepEqual(members.map((m) => [m.name, m.count, m.notes.map((n) => n.body)]), [['m1', 2, ['a', 'b']], ['m2', 1, ['d']], ['m3', 1, ['c']]])
+      // 多对一也按整组列连接
+      const owners = await db.queryable(Note).orderBy((n) => n.body).select((n) => ({ body: n.body, owner: n.member.name })).toList()
+      assert.deepEqual(owners.map((o) => [o.body, o.owner]), [['a', 'm1'], ['b', 'm1'], ['c', 'm3'], ['d', 'm2']])
+      assert.equal(await db.queryable(Member).where((m) => m.notes.any((n) => n.body.eq('c'))).count(), 1)
     })
   })
 

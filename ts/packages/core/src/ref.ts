@@ -90,11 +90,37 @@ function joinOne(scope: Scope, parent: AnyRef, prop: string, rel: One, parentNul
   const target = scope.schema.entities[rel.target]!
   const alias = scope.nextAlias()
   const ref = makeRef(scope, rel.target, alias, parentNullable || rel.nullable)
-  const on: Node = { k: 'op', op: '=', l: { k: 'col', alias, name: target.columnNames[rel.to]! }, r: columnNode(scope, info, rel.from) }
+  // 复合外键：每对列一个等式，用 AND 连起来
+  const on = allOf(rel.to.map((c, i): Node => ({ k: 'op', op: '=', l: { k: 'col', alias, name: target.columnNames[c]! }, r: columnNode(scope, info, rel.from[i]!) })))
   // 拦截器的条件放进 ON：LEFT JOIN 不会因此把主表的行过滤掉
   const extra = scope.filters(ref)
   scope.joins.push({ table: target.table, alias, on: extra.length === 0 ? on : { k: 'and', items: [on, ...extra] } })
   return ref
+}
+
+/** 多个条件用 AND 连起来；只有一个时原样返回 */
+export function allOf(items: readonly Node[]): Node {
+  return items.length === 1 ? items[0]! : { k: 'and', items }
+}
+
+/**
+ * 一对多 / 多对多里"孩子一侧"用来和父行 from 列比较的列（按位置对应）。
+ * 直连时是目标表的 to 列；多对多时先把中间表 inner join 到目标表上，返回中间表引用父表的那几列。
+ * 导出给 toList 的第二条查询复用，两处的连接方式必须一致。
+ */
+export function linkColumns(scope: Scope, relation: Many, targetRoot: AnyRef): Node[] {
+  const info = targetRoot[REF]
+  const target = scope.schema.entities[relation.target]!
+  const col = (alias: string, entity: { columnNames: Record<string, string> }, prop: string): Node => ({ k: 'col', alias, name: entity.columnNames[prop]! })
+  const through = relation.through
+  if (!through) return relation.to.map((c) => col(info.alias, target, c))
+  const middle = scope.schema.entities[through.entity]!
+  const alias = scope.nextAlias()
+  const on = allOf(through.to.map((c, i): Node => ({ k: 'op', op: '=', l: col(alias, middle, c), r: col(info.alias, target, relation.to[i]!) })))
+  // 拦截器（租户、逻辑删除等）也要作用在中间表上，条件放进 ON
+  const extra = scope.filters(makeRef(scope, through.entity, alias, false))
+  scope.joins.push({ table: middle.table, alias, kind: 'inner', on: extra.length === 0 ? on : { k: 'and', items: [on, ...extra] } })
+  return through.from.map((c) => col(alias, middle, c))
 }
 
 export function columnNode(scope: Scope, info: RefInfo, prop: string): Node {
@@ -191,7 +217,8 @@ export class ManyRef<S extends AnySchema, K extends EntityKey<S>> {
     const target = scope.schema.entities[this.relation.target]!
     const root = scope.root(this.relation.target)
     const alias = root[REF].alias
-    const where: Node[] = [{ k: 'op', op: '=', l: { k: 'col', alias, name: target.columnNames[this.relation.to]! }, r: columnNode(scope, this.parent[REF], this.relation.from) }]
+    const link = linkColumns(scope, this.relation, root)
+    const where: Node[] = [allOf(link.map((l, i): Node => ({ k: 'op', op: '=', l, r: columnNode(scope, this.parent[REF], this.relation.from[i]!) })))]
     where.push(...scope.filters(root))
     for (const f of filter ? [...this.filters, filter] : this.filters) {
       const n = condNode(f(root))

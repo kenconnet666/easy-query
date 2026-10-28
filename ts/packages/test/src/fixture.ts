@@ -47,12 +47,41 @@ export const Ext = entity('t_ext', {
   raw: col.bytes(),
 })
 
-export const schema = defineSchema({ Company, User, Post, Comment, Ext }, {
+/** 多对多：角色，经 UserRole 中间表与用户相连 */
+export const Role = entity('t_role', {
+  id: col.bigint().primaryKey().generated(),
+  name: col.string(),
+})
+
+export const UserRole = entity('t_user_role', {
+  userId: col.bigint().primaryKey(),
+  roleId: col.bigint().primaryKey(),
+})
+
+/** 复合外键：成员以 (tenantId, id) 为主键，笔记按这一对列引用成员——只比较 id 会把别的租户的成员当成同一个人 */
+export const Member = entity('t_member', {
+  tenantId: col.int().primaryKey(),
+  id: col.int().primaryKey(),
+  name: col.string(),
+})
+
+export const Note = entity('t_note', {
+  id: col.bigint().primaryKey().generated(),
+  tenantId: col.int(),
+  memberId: col.int(),
+  body: col.string(),
+})
+
+export const schema = defineSchema({ Company, User, Post, Comment, Ext, Role, UserRole, Member, Note }, {
   Company: (r) => ({ users: r.many('User', { from: 'id', to: 'companyId' }) }),
   User: (r) => ({
     company: r.one('Company', { from: 'companyId', to: 'id' }),
     posts: r.many('Post', { from: 'id', to: 'userId' }),
+    roles: r.manyToMany('Role', { through: 'UserRole', throughFrom: 'userId', throughTo: 'roleId' }),
   }),
+  Role: (r) => ({ users: r.manyToMany('User', { through: 'UserRole', throughFrom: 'roleId', throughTo: 'userId' }) }),
+  Member: (r) => ({ notes: r.many('Note', { from: ['tenantId', 'id'], to: ['tenantId', 'memberId'] }) }),
+  Note: (r) => ({ member: r.one('Member', { from: ['tenantId', 'memberId'], to: ['tenantId', 'id'] }) }),
   Post: (r) => ({
     user: r.one('User', { from: 'userId', to: 'id' }),
     comments: r.many('Comment', { from: 'id', to: 'postId' }),

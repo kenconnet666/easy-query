@@ -5,7 +5,7 @@
 import { checkAliases, type Node, type OrderNode, type SelectNode } from './ast.ts'
 import { SqlWriter, type Statement } from './dialect.ts'
 import { aggregate, aggregateCodec, codecs, condNode, Expr, orderNodes, type Cond, type Numeric, type OrderItem } from './expr.ts'
-import { columnNode, ListOf, makeRef, REF, Scope, type AnyRef, type Ref, type Selected } from './ref.ts'
+import { columnNode, linkColumns, ListOf, makeRef, REF, Scope, type AnyRef, type Ref, type Selected } from './ref.ts'
 import type { AnySchema, EntityKey } from './relations.ts'
 import type { KeyOf } from './db.ts'
 import type { Codec, Entity, Row } from './schema.ts'
@@ -399,7 +399,8 @@ type Reader = (row: Record<string, unknown>) => unknown
 /** toList 等待第二条查询填充的数组：父行的键 → 这些父行上的数组 */
 interface PendingList {
   readonly list: ListOf<unknown, boolean>
-  readonly slots: Map<string, { readonly key: unknown; readonly arrays: unknown[][] }>
+  /** 父行的关联键（复合外键是多列，id 是各列拼成的文字）→ 这些父行上的数组 */
+  readonly slots: Map<string, { readonly keys: readonly unknown[]; readonly arrays: unknown[][] }>
 }
 
 /** 把 select 形状拆成扁平的列，同时生成按行重组对象的读取函数 */
@@ -466,21 +467,28 @@ class ShapeCompiler {
   }
 
   private list(list: ListOf<unknown, boolean>): Reader {
-    const keyAs = this.hidden(columnNode(list.many.scope, list.many.parent[REF], list.many.relation.from))
+    // 父行上关联键的每一列都要带出来（复合外键有多列）
+    const keyAs = list.many.relation.from.map((c) => this.hidden(columnNode(list.many.scope, list.many.parent[REF], c)))
     const pending: PendingList = { list, slots: new Map() }
     this.lists.push(pending)
     return (row) => {
       const array: unknown[] = []
-      const key = row[keyAs]
-      if (key !== null && key !== undefined) {
-        const id = String(key)
+      const keys = keyAs.map((as) => row[as])
+      // 关联键里有 NULL 的父行不会有孩子
+      if (keys.every((key) => key !== null && key !== undefined)) {
+        const id = slotId(keys)
         let slot = pending.slots.get(id)
-        if (!slot) pending.slots.set(id, (slot = { key, arrays: [] }))
+        if (!slot) pending.slots.set(id, (slot = { keys, arrays: [] }))
         slot.arrays.push(array)
       }
       return array
     }
   }
+}
+
+/** 关联键 → Map 的键：各列转成文字再用不会出现在数据里的分隔符拼起来 */
+function slotId(keys: readonly unknown[]): string {
+  return keys.map(String).join('')
 }
 
 function decoder(as: string, codec: Codec<any> | undefined): Reader {
@@ -520,20 +528,22 @@ async function fillLists(ctx: Context, lists: readonly PendingList[]): Promise<v
     where.push(...scope.filters(root))
     const shape = new ShapeCompiler(ctx)
     shape.compile(pending.list.shape ? pending.list.shape(root) : root)
-    const toNode = columnNode(scope, root[REF], many.relation.to)
-    const keyAs = shape.hidden(toNode)
+    // 孩子一侧的关联列（多对多时已经把中间表 join 进 scope）
+    const toNodes = linkColumns(scope, many.relation, root)
+    const keyAs = toNodes.map((n) => shape.hidden(n))
     const target = ctx.schema.entities[many.relation.target]!
     const slots = [...pending.slots.values()]
-    for (let i = 0; i < slots.length; i += IN_CHUNK) {
-      const keys: Node[] = slots.slice(i, i + IN_CHUNK).map((s) => ({ k: 'param', value: s.key, codec: undefined }))
+    // 参数个数 = 键个数 × 列数，复合外键时每块少放一些
+    const chunk = Math.max(1, Math.floor(IN_CHUNK / toNodes.length))
+    for (let i = 0; i < slots.length; i += chunk) {
       const select: SelectNode = {
         from: { table: target.table, alias: root[REF].alias },
-        joins: scope.joins, where: [{ k: 'in', e: toNode, list: keys, not: false }, ...where],
+        joins: scope.joins, where: [matchKeys(toNodes, slots.slice(i, i + chunk).map((s) => s.keys)), ...where],
         groupBy: [], having: [], orderBy, columns: shape.columns, distinct: false, limit: undefined, offset: undefined, forUpdate: false,
       }
-      for (const row of await query(ctx, render(ctx, many.take === undefined ? select : perParent(select, toNode, many.take)))) {
+      for (const row of await query(ctx, render(ctx, many.take === undefined ? select : perParent(select, toNodes, many.take)))) {
         const item = shape.read(row)
-        for (const array of pending.slots.get(String(row[keyAs]))?.arrays ?? []) array.push(item)
+        for (const array of pending.slots.get(slotId(keyAs.map((as) => row[as])))?.arrays ?? []) array.push(item)
       }
     }
     await fillLists(ctx, shape.lists)
@@ -542,11 +552,21 @@ async function fillLists(ctx: Context, lists: readonly PendingList[]): Promise<v
 }
 
 /**
+ * 孩子的关联列等于其中某组父键：单列用 IN；复合外键写成 (a = ? AND b = ?) OR …（行值 IN 各库支持不一，这样处处可用）。
+ */
+function matchKeys(columns: readonly Node[], keys: readonly (readonly unknown[])[]): Node {
+  const param = (value: unknown): Node => ({ k: 'param', value, codec: undefined })
+  if (columns.length === 1) return { k: 'in', e: columns[0]!, list: keys.map((key) => param(key[0])), not: false }
+  const one = (key: readonly unknown[]): Node => ({ k: 'and', items: columns.map((l, i): Node => ({ k: 'op', op: '=', l, r: param(key[i]) })) })
+  return { k: 'or', items: keys.map(one) }
+}
+
+/**
  * 每个父行只取前 take 条：内层按关联列分区编号，外层只留编号 <= take 的行。
  * SELECT eq_w.c0, … FROM (SELECT …, ROW_NUMBER() OVER (PARTITION BY 关联列 ORDER BY …) AS eq_rn FROM … WHERE …) eq_w WHERE eq_w.eq_rn <= take
  */
-function perParent(select: SelectNode, key: Node, take: number): SelectNode {
-  const rn: Node = { k: 'over', fn: { k: 'lit', sql: 'ROW_NUMBER()' }, partition: [key], order: select.orderBy, frame: undefined }
+function perParent(select: SelectNode, keys: readonly Node[], take: number): SelectNode {
+  const rn: Node = { k: 'over', fn: { k: 'lit', sql: 'ROW_NUMBER()' }, partition: keys, order: select.orderBy, frame: undefined }
   const inner: SelectNode = { ...select, orderBy: [], columns: [...select.columns, { e: rn, as: 'eq_rn' }] }
   const col = (name: string): Node => ({ k: 'col', alias: 'eq_w', name })
   return {
