@@ -4,7 +4,7 @@
 
 ## 当前
 
-- ROADMAP 的"成熟"条件已满足（M0–M4、M5 T0–T3、flow 验收），停下汇报。之后可做 M6：合并上游、文档索引、可回馈上游的清单；T4 pull 视需要。
+- M6 收尾完成：文档索引 `README.md`、交接 `HANDOFF.md`（换机器先读）、回馈上游清单 `upstream-candidates.md`。下一步待用户定：TS T4 pull、BACKLOG 条目，或去上游开 PR。
 - flow 验收分支 `eq-fork-acceptance`（本地，不推送）：每个工作项前 fetch 并 merge flow 的 origin/master。
 
 ## 最近完成
