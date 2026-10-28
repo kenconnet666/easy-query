@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { or, sql } from '@eqts/core'
-import { Post, User } from '../../core/test/fixture.ts'
-import { memoryDb } from './env.ts'
+import { Post, User } from '../src/fixture.ts'
+import { memoryDb } from '../src/sqlite-env.ts'
 
 describe('sqlite: SQL text', async () => {
   const { db } = await memoryDb()

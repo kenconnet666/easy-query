@@ -1,0 +1,15 @@
+{
+  "name": "@eqts/test",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./fixture": "./src/fixture.ts",
+    "./suite": "./src/suite.ts",
+    "./sqlite-env": "./src/sqlite-env.ts"
+  },
+  "dependencies": {
+    "@eqts/core": "workspace:*",
+    "@eqts/sqlite": "workspace:*"
+  }
+}

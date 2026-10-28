@@ -1,7 +1,7 @@
 /**
  * 类型层面的检查：只参与 tsc，不运行。正例用 Equal 断言推导出的类型，负例用 @ts-expect-error 固定"必须报错"。
  */
-import { col, createDb, defineSchema, entity, sql, win, type Adapter, type Insert, type Row } from '../src/index.ts'
+import { col, createDb, defineSchema, entity, sql, win, type Adapter, type Insert, type Row } from '@eqts/core'
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
 function expect<T extends true>(): T | void {}

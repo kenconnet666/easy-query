@@ -4,8 +4,8 @@
 import { after, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createDb, type Statement } from '@eqts/core'
-import { Post, schema, seed, type TestEnv } from '../../core/test/fixture.ts'
-import { liveSuite } from '../../core/test/suite.ts'
+import { Post, schema, seed, type TestEnv } from '@eqts/test/fixture'
+import { liveSuite } from '@eqts/test/suite'
 import { closeHana, Hana, hana } from '../src/index.ts'
 
 const TABLES = ['t_comment', 't_post', 't_user', 't_company']

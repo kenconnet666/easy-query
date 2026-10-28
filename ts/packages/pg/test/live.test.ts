@@ -7,8 +7,8 @@ import { after, describe, it } from 'node:test'
 import pg from 'pg'
 import assert from 'node:assert/strict'
 import { createDb, sql, type Statement } from '@eqts/core'
-import { Post, schema, seed, User, type TestEnv } from '../../core/test/fixture.ts'
-import { liveSuite } from '../../core/test/suite.ts'
+import { Post, schema, seed, User, type TestEnv } from '@eqts/test/fixture'
+import { liveSuite } from '@eqts/test/suite'
 import { Pg, postgres } from '../src/index.ts'
 
 const DDL = [

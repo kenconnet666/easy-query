@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { createDb } from '@eqts/core'
-import { Company, Post, schema } from '../../core/test/fixture.ts'
+import { Company, Post, schema } from '@eqts/test/fixture'
 import { hana } from '../src/index.ts'
 
 describe('hana: SQL text', () => {

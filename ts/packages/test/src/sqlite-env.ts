@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
 import { createDb, type Statement } from '@eqts/core'
-import { schema, type TestEnv } from '../../core/test/fixture.ts'
-import { sqlite } from '../src/index.ts'
+import { schema, type TestEnv } from './fixture.ts'
+import { sqlite } from '@eqts/sqlite'
 
 const DDL = `
 CREATE TABLE t_company (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL);

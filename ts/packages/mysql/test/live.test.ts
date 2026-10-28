@@ -7,8 +7,8 @@ import { after, describe, it } from 'node:test'
 import { createPool, type Pool } from 'mysql2/promise'
 import { createDb, type Statement } from '@eqts/core'
 import assert from 'node:assert/strict'
-import { Post, schema, seed, User, type TestEnv } from '../../core/test/fixture.ts'
-import { liveSuite } from '../../core/test/suite.ts'
+import { Post, schema, seed, User, type TestEnv } from '@eqts/test/fixture'
+import { liveSuite } from '@eqts/test/suite'
 import { MySQL, mysql } from '../src/index.ts'
 
 const DDL = [

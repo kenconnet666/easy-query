@@ -1,11 +1,11 @@
 /**
  * 生成 T0 类型压力样板：50 个实体，每个都有指向下一个的多对一与指向上一个的一对多，查询里走 5 层导航。
- * 用法：node tools/gen-stress.ts > packages/core/test/stress.check.ts
+ * 用法：node tools/gen-stress.ts > packages/test/test/stress.check.ts
  */
 const N = 50
 const lines: string[] = [
   '// 由 tools/gen-stress.ts 生成，勿手改。T0：50 个实体、互相引用的关系、5 层导航，tsc 不报实例化过深。',
-  "import { col, createDb, defineSchema, entity, type Adapter } from '../src/index.ts'",
+  "import { col, createDb, defineSchema, entity, type Adapter } from '@eqts/core'",
   '',
 ]
 for (let i = 0; i < N; i++) {

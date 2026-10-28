@@ -1,7 +1,7 @@
 /**
  * 各方言共用的测试实体与种子数据。建表语句各方言自己写（类型不同），列名一致。
  */
-import { col, defineSchema, entity, type Adapter, type Db, type Statement } from '../src/index.ts'
+import { col, defineSchema, entity, type Adapter, type Db, type Statement } from '@eqts/core'
 
 export const Company = entity('t_company', {
   id: col.bigint().primaryKey().generated(),

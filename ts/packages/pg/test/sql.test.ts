@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import type { Pool } from 'pg'
 import { createDb } from '@eqts/core'
-import { schema, User } from '../../core/test/fixture.ts'
+import { schema, User } from '@eqts/test/fixture'
 import { postgres } from '../src/index.ts'
 
 describe('postgres: SQL text', () => {

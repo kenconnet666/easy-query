@@ -3,7 +3,7 @@
  */
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { and, createDb, or, touch, win, type Expr, type Interceptor } from '../src/index.ts'
+import { and, createDb, or, touch, win, type Expr, type Interceptor } from '@eqts/core'
 import { Comment, Company, Post, schema, seed, User, type TestEnv } from './fixture.ts'
 
 export function liveSuite(name: string, open: () => Promise<TestEnv>): void {
