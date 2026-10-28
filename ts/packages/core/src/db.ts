@@ -12,7 +12,8 @@ import { Deletable, Insertable, Updatable } from './mutation.ts'
 import { newQueryable, type Queryable } from './query.ts'
 import type { AnySchema, EntityKey } from './relations.ts'
 import type { Entity } from './schema.ts'
-import type { Adapter, Context, Session, TransactionOptions } from './session.ts'
+import { createSqlTag, type SqlTag } from './native.ts'
+import type { Adapter, Context, ExecutionEvent, Session, TransactionOptions } from './session.ts'
 
 /** 实体对象在 schema 里的键 */
 export type KeyOf<S extends AnySchema, E> = { [K in EntityKey<S>]: S['entities'][K] extends E ? K : never }[EntityKey<S>]
@@ -22,8 +23,10 @@ type SchemaEntity<S extends AnySchema> = S['entities'][EntityKey<S>]
 export interface DbOptions<S extends AnySchema> {
   readonly schema: S
   readonly adapter: Adapter
-  /** 每条语句执行前调用 */
+  /** 每条语句执行前调用，最简单的日志 */
   readonly log?: (statement: Statement) => void
+  /** 每条语句执行后调用（成功与失败都会），带耗时与行数；用来记慢 SQL、指标、链路追踪。钩子里抛错会让这条语句失败 */
+  readonly onExecute?: (event: ExecutionEvent) => void
   /** 谓词与写入拦截器，见 tenant()、touch() */
   readonly interceptors?: readonly Interceptor[]
 }
@@ -33,12 +36,15 @@ export class Db<S extends AnySchema> {
   private readonly adapter: Adapter
   private readonly keys: Map<Entity, string>
   private readonly inTransaction: boolean
+  /** 原生 SQL：`db.sql\`SELECT … ${value}\``（查询）、`db.sql.execute\`…\``（写入），值作为绑定参数，见 native.ts */
+  readonly sql: SqlTag
 
   constructor(ctx: Context, adapter: Adapter, keys: Map<Entity, string>, inTransaction: boolean) {
     this.ctx = ctx
     this.adapter = adapter
     this.keys = keys
     this.inTransaction = inTransaction
+    this.sql = createSqlTag(ctx)
   }
 
   queryable<E extends SchemaEntity<S>>(entity: E): Queryable<S, KeyOf<S, E>> {
@@ -74,7 +80,7 @@ export function createDb<S extends AnySchema>(options: DbOptions<S>): Db<S> {
   const keys = new Map<Entity, string>()
   for (const [key, entity] of Object.entries(options.schema.entities)) keys.set(entity, key)
   const ctx: Context = {
-    schema: options.schema, dialect: options.adapter.dialect, session: options.adapter.driver, log: options.log,
+    schema: options.schema, dialect: options.adapter.dialect, session: options.adapter.driver, log: options.log, onExecute: options.onExecute,
     interceptors: new Interceptors(options.interceptors ?? []),
   }
   return new Db(ctx, options.adapter, keys, false)

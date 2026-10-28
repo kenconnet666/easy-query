@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import type { Pool } from 'mysql2/promise'
 import { createDb, Dialect, type Driver } from '@eqts/core'
-import { schema, User } from '../../core/test/fixture.ts'
+import { schema, User } from '@eqts/test/fixture'
 import { MySQL, mysql } from '../src/index.ts'
 
 describe('mysql: SQL text', () => {

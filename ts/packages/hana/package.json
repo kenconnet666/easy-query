@@ -13,6 +13,7 @@
     "hdb": "^2.30.0"
   },
   "devDependencies": {
+    "@eqts/test": "workspace:*",
     "hdb": "2.30.1"
   }
 }

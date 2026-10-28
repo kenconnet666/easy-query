@@ -4,7 +4,7 @@
  */
 import { checkAliases, type Node, type OrderNode, type SelectNode } from './ast.ts'
 import { SqlWriter, type Statement } from './dialect.ts'
-import { aggregate, aggregateCodec, codecs, condNode, Expr, orderNodes, type Cond, type OrderItem } from './expr.ts'
+import { aggregate, aggregateCodec, codecs, condNode, Expr, orderNodes, type Cond, type Numeric, type OrderItem } from './expr.ts'
 import { columnNode, ListOf, REF, Scope, type AnyRef, type Ref, type Selected } from './ref.ts'
 import type { AnySchema, EntityKey } from './relations.ts'
 import type { Codec, Row } from './schema.ts'
@@ -154,6 +154,52 @@ export class Queryable<S extends AnySchema, K extends EntityKey<S>, Out = Row<S[
     return this.with({ disabled: [...this.state.disabled, ...names] })
   }
 
+  /** 满足条件的行里该值的和；没有行（或全为 NULL）时为 null。decimal 列得到数值文字，不经过浮点 */
+  sum<V extends Numeric | null>(value: (r: Ref<S, K>) => Expr<V>): Promise<NonNullable<V> | null> {
+    return this.scalar('sum', value)
+  }
+
+  /** 平均值；没有行时为 null。整数列得到 number，decimal 列保持 decimal */
+  avg<V extends Numeric | null>(value: (r: Ref<S, K>) => Expr<V>): Promise<NonNullable<V> | null> {
+    return this.scalar('avg', value)
+  }
+
+  /** 最大值；没有行时为 null */
+  max<V>(value: (r: Ref<S, K>) => Expr<V>): Promise<NonNullable<V> | null> {
+    return this.scalar('max', value)
+  }
+
+  /** 最小值；没有行时为 null */
+  min<V>(value: (r: Ref<S, K>) => Expr<V>): Promise<NonNullable<V> | null> {
+    return this.scalar('min', value)
+  }
+
+  /** 去重后的个数（NULL 不计） */
+  async countDistinct(value: (r: Ref<S, K>) => Expr<unknown>): Promise<number> {
+    const rows = await this.aggregateQuery((r) => ({ v: aggregate<number>('count', value(r), codecs.int, true) })).toList()
+    return Number(rows[0]?.v ?? 0)
+  }
+
+  /**
+   * 整个查询折成一个聚合值：沿用 where 与拦截器条件，丢掉 orderBy。
+   * limit / offset 作用在聚合之后的单行上没有意义，直接报错，免得悄悄返回错误的数字。
+   */
+  private async scalar(fn: 'sum' | 'avg' | 'max' | 'min', value: (r: Ref<S, K>) => Expr<any>): Promise<any> {
+    if (this.state.limit !== undefined || this.state.offset !== undefined) {
+      throw new Error(`${fn}() cannot be combined with limit() / offset(); aggregate a paged subquery explicitly instead`)
+    }
+    const rows = await this.aggregateQuery((r) => {
+      const e = value(r)
+      return { v: aggregate<unknown>(fn, e, aggregateCodec(fn, e)) }
+    }).toList()
+    return rows[0]?.v ?? null
+  }
+
+  /** 把 select 换成一个聚合列，并清掉排序 / 分页 / distinct */
+  private aggregateQuery<X>(shape: (r: Ref<S, K>) => X): Queryable<S, K, Selected<X>> {
+    return new Queryable(this.ctx, { ...this.state, select: shape, orderBy: [], limit: undefined, offset: undefined, distinct: false })
+  }
+
   /** 分组；不调 select 时结果就是分组键 */
   groupBy<G extends Record<string, Expr<any>>>(keys: (r: Ref<S, K>) => G): GroupedQueryable<S, K, G, Selected<G>> {
     return new GroupedQueryable(this.ctx, { ...this.state, group: keys as never })
@@ -166,8 +212,8 @@ export interface Group<S extends AnySchema, K extends EntityKey<S>, G> {
   /** 不带条件是 COUNT(*)；带条件只数满足的行 */
   count(filter?: (r: Ref<S, K>) => Cond): Expr<number>
   countDistinct(value: (r: Ref<S, K>) => Expr<unknown>): Expr<number>
-  sum<V extends number | bigint | string | null>(value: (r: Ref<S, K>) => Expr<V>): Expr<NonNullable<V> | null>
-  avg<V extends number | bigint | string | null>(value: (r: Ref<S, K>) => Expr<V>): Expr<NonNullable<V> | null>
+  sum<V extends Numeric | null>(value: (r: Ref<S, K>) => Expr<V>): Expr<NonNullable<V> | null>
+  avg<V extends Numeric | null>(value: (r: Ref<S, K>) => Expr<V>): Expr<NonNullable<V> | null>
   max<V>(value: (r: Ref<S, K>) => Expr<V>): Expr<NonNullable<V> | null>
   min<V>(value: (r: Ref<S, K>) => Expr<V>): Expr<NonNullable<V> | null>
 }

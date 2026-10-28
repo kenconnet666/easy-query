@@ -10,12 +10,14 @@
 import pg from 'pg'
 import type { Pool, PoolClient, QueryConfig, QueryResult } from 'pg'
 import { pgFunctions } from './functions.ts'
-import { Dialect, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type TransactionOptions } from '@eqts/core'
+import { Dialect, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Node, type Session, type SqlWriter, type TransactionOptions } from '@eqts/core'
 
 export { Pg } from './functions.ts'
 
 export class PostgresDialect extends Dialect {
   readonly name = 'postgres'
+  /** PG 协议里参数个数是 16 位整数，最多 65535 */
+  override readonly maxBindParams = 65535
   override readonly generatedKeys = 'returning' as const
 
   override placeholder(index: number): string {
@@ -24,7 +26,22 @@ export class PostgresDialect extends Dialect {
 
   /** CONCAT 是可变参数函数，推不出参数的类型：每项都转成 text */
   protected override functions(): Record<string, FunctionRenderer> {
-    return { ...super.functions(), ...pgFunctions, concat: (a) => `CONCAT(${a.map((x) => `CAST(${x} AS text)`).join(', ')})` }
+    return {
+      ...super.functions(),
+      ...pgFunctions,
+      concat: (a) => `CONCAT(${a.map((x) => `CAST(${x} AS text)`).join(', ')})`,
+      // PG 的两参数 ROUND 只接受 numeric，double 列要先转
+      round: (a) => `ROUND(CAST(${a[0]} AS NUMERIC), ${a[1]})`,
+      cast_string: (a) => `CAST(${a[0]} AS TEXT)`,
+    }
+  }
+
+  /** CASE 分支里的字符串 / 数字 / 布尔参数 PG 推断不出类型（"could not determine data type of parameter"），加显式转换 */
+  protected override caseValue(n: Node, w: SqlWriter): string {
+    const sql = this.node(n, w)
+    if (n.k !== 'param') return sql
+    const type = typeof n.value === 'string' ? 'TEXT' : typeof n.value === 'number' ? 'NUMERIC' : typeof n.value === 'boolean' ? 'BOOLEAN' : undefined
+    return type ? `CAST(${sql} AS ${type})` : sql
   }
 
   /** PG 有布尔类型，不转 1 / 0 */

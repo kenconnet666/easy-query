@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { or, sql } from '@eqts/core'
-import { Post, User } from '../../core/test/fixture.ts'
-import { memoryDb } from './env.ts'
+import { Post, User } from '../src/fixture.ts'
+import { memoryDb } from '../src/sqlite-env.ts'
 
 describe('sqlite: SQL text', async () => {
   const { db } = await memoryDb()
@@ -77,5 +77,38 @@ describe('sqlite: SQL text', async () => {
 
   it('rejects joins in writes', () => {
     assert.throws(() => db.delete(User).where((u) => u.company.name.eq('acme')).toSQL(), /JOIN/)
+  })
+
+  it('splits big inserts into statements that stay below the bind-parameter limit', () => {
+    const t = new Date(0)
+    // 每行 2 个参数：SQLite 上限 32766，每条语句最多装 16383 行，所以 40000 行是 3 条
+    const statements = db.insert(User).values(Array.from({ length: 40000 }, (_, i) => ({ name: `u${i}`, createdAt: t }))).toSQL()
+    assert.deepEqual(statements.map((s) => s.params.length), [32766, 32766, 14468])
+  })
+
+  it('reports an over-long in-list before it reaches the database', () => {
+    const ids = Array.from({ length: 40000 }, (_, i) => i)
+    assert.throws(() => db.queryable(User).where((u) => u.id.in(ids)).toSQL(), /more than 32766 parameters/)
+  })
+
+  it('drops ordering when aggregating the whole query', async () => {
+    // 排序对聚合没有意义，PG 还会因为"ORDER BY 列不在聚合里"报错，所以执行的语句里不带
+    const { db, statements } = await memoryDb()
+    await db.queryable(Post).orderBy((p) => p.id).sum((p) => p.amount)
+    assert.equal(statements[0]!.sql, 'SELECT SUM(t0."amount") AS "c0" FROM "t_post" t0')
+  })
+})
+
+describe('sqlite: native SQL', async () => {
+  const { db, statements } = await memoryDb()
+
+  it('binds values, expands arrays and quotes identifiers', async () => {
+    await db.sql`SELECT ${1} FROM ${db.sql.ident('t_user')} WHERE name IN (${['a', 'b']}) AND age > ${null}`
+    assert.deepEqual(statements.at(-1), { sql: 'SELECT ? FROM "t_user" WHERE name IN (?, ?) AND age > ?', params: [1, 'a', 'b', null] })
+  })
+
+  it('encodes dates and booleans like the builders do', async () => {
+    await db.sql`SELECT ${new Date('2026-01-02T03:04:05.006Z')}, ${true}`
+    assert.deepEqual(statements.at(-1)!.params, ['2026-01-02 03:04:05.006', 1])
   })
 })

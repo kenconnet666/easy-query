@@ -34,21 +34,52 @@ export interface Adapter {
   readonly driver: Driver
 }
 
+/** 一条语句执行完（成功或失败）后交给 onExecute 的信息，对应 Java 版的 JdbcExecutorListener */
+export interface ExecutionEvent {
+  readonly statement: Statement
+  /** query 是读（返回行），execute 是写（返回影响的行数） */
+  readonly kind: 'query' | 'execute'
+  /** 驱动执行耗时，毫秒 */
+  readonly durationMs: number
+  /** 读返回的行数 / 写影响的行数；失败时为 0 */
+  readonly rows: number
+  /** 失败时的错误；成功时为 undefined。错误之后仍会照常抛给调用方 */
+  readonly error: unknown
+}
+
 /** 构建器执行时用到的一切 */
 export interface Context {
   readonly schema: AnySchema
   readonly dialect: Dialect
   readonly session: Session
+  /** 每条语句执行前调用 */
   readonly log: ((statement: Statement) => void) | undefined
+  /** 每条语句执行后调用（成功与失败都会），用来记耗时、慢 SQL、链路追踪 */
+  readonly onExecute: ((event: ExecutionEvent) => void) | undefined
   readonly interceptors: Interceptors
 }
 
-export async function query(ctx: Context, statement: Statement): Promise<Record<string, unknown>[]> {
-  ctx.log?.(statement)
-  return ctx.session.query(statement.sql, statement.params)
+export function query(ctx: Context, statement: Statement): Promise<Record<string, unknown>[]> {
+  return observe(ctx, statement, 'query', () => ctx.session.query(statement.sql, statement.params), (rows) => rows.length)
 }
 
-export async function execute(ctx: Context, statement: Statement): Promise<ExecuteResult> {
+export function execute(ctx: Context, statement: Statement): Promise<ExecuteResult> {
+  return observe(ctx, statement, 'execute', () => ctx.session.execute(statement.sql, statement.params), (result) => result.affected)
+}
+
+/**
+ * 执行并通知钩子。钩子在 try 之外调用：钩子自己抛错会让这条语句失败，但不会被当成"语句失败"再通知一次。
+ */
+async function observe<T>(ctx: Context, statement: Statement, kind: 'query' | 'execute', run: () => Promise<T>, count: (result: T) => number): Promise<T> {
   ctx.log?.(statement)
-  return ctx.session.execute(statement.sql, statement.params)
+  const started = performance.now()
+  let result: T
+  try {
+    result = await run()
+  } catch (error) {
+    ctx.onExecute?.({ statement, kind, durationMs: performance.now() - started, rows: 0, error })
+    throw error
+  }
+  ctx.onExecute?.({ statement, kind, durationMs: performance.now() - started, rows: count(result), error: undefined })
+  return result
 }

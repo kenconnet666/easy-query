@@ -28,6 +28,13 @@ const columnList = (cols: string[]) => (cols.length === 1 ? cols[0]! : `(${cols.
 
 /** 加进 HANA 方言的函数表 */
 export const hanaFunctions: Record<string, FunctionRenderer> = {
+  // 通用函数里与标准写法不同的部分（HANA 的 LOCATE 参数顺序是 字符串、子串）
+  index_of: (a) => `(LOCATE(${a[0]}, ${a[1]}) - 1)`,
+  add_days: (a) => `ADD_DAYS(${a[0]}, ${a[1]})`,
+  add_months: (a) => `ADD_MONTHS(${a[0]}, ${a[1]})`,
+  diff_days: (a) => `DAYS_BETWEEN(${a[1]}, ${a[0]})`,
+  cast_string: (a) => `CAST(${a[0]} AS NVARCHAR(5000))`,
+  cast_double: (a) => `CAST(${a[0]} AS DOUBLE)`,
   'hana.contains': (a) => `CONTAINS(${columnList(a.slice(0, -1))}, ${a[a.length - 1]})`,
   'hana.contains_fuzzy': (a) => `CONTAINS(${columnList(a.slice(0, -2))}, ${a[a.length - 2]}, FUZZY(${a[a.length - 1]}))`,
   'hana.score': () => 'SCORE()',

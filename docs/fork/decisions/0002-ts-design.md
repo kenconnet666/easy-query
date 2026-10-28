@@ -171,14 +171,16 @@ ts/
   packages/mysql     mysql2；8.0.18 基线（PolarDB）
   packages/pg        pg
   packages/hana      hdb（SAP 的纯 JS 驱动；原计划的 @sap/hana-client 是原生扩展，Node 新版本常缺预编译包）
-  test/              跨方言用例（SQL 文本快照 + 本地实库）
+  packages/test      @eqts/test 独立测试模块：共用夹具、跨方言套件（SQLite / MySQL / PG / HANA）、类型检查
+  packages/decimal   decimal.js 列（peer 依赖）
+  packages/date      @internationalized/date 列（peer 依赖）
 ```
 
 ## 8. T0 类型样板（结果）
 
-- `packages/core/test/stress.check.ts`（`tools/gen-stress.ts` 生成）：50 个实体、每个都有多对一 next/prev 与一对多 children，5 层导航的 where/select/toList。
+- `packages/test/test/stress.check.ts`（`tools/gen-stress.ts` 生成）：50 个实体、每个都有多对一 next/prev 与一对多 children，5 层导航的 where/select/toList。
   TypeScript 7.0.2：Check time 0.15s、Instantiations 7.9 万、无 `TS2589`、无循环推导错误。
-- `packages/core/test/types.check.ts`：结果类型的正例（Equal 断言）与负例（`@ts-expect-error`）：用错列类型比较、对数字列调用 like、不存在的列、一对多导航直接取列、
+- `packages/test/test/types.check.ts`：结果类型的正例（Equal 断言）与负例（`@ts-expect-error`）：用错列类型比较、对数字列调用 like、不存在的列、一对多导航直接取列、
   实体不在 schema 里、insert 缺必填列或类型不对、set 类型不对、关系的 from 列或目标实体写错。
 - 已知的类型精度边界：`date` 列是文字，所以 `year()` 也允许在字符串列上调用。
 

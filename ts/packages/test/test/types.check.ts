@@ -1,7 +1,7 @@
 /**
  * 类型层面的检查：只参与 tsc，不运行。正例用 Equal 断言推导出的类型，负例用 @ts-expect-error 固定"必须报错"。
  */
-import { col, createDb, defineSchema, entity, sql, win, type Adapter, type Insert, type Row } from '../src/index.ts'
+import { col, createDb, defineSchema, entity, sql, win, type Adapter, type Insert, type Row } from '@eqts/core'
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
 function expect<T extends true>(): T | void {}
@@ -50,7 +50,7 @@ async function results() {
   expect<Equal<typeof rows, {
     id: number
     company: string | null
-    user: { age: number | null; n: number; total: string | null }
+    user: { age: number | null; n: number; total: `${number}` | null }
     posts: { title: string; author: string }[]
     len: number
   }[]>>()
@@ -76,8 +76,22 @@ async function results() {
 
   const keys = await db.queryable(Post).groupBy((p) => ({ userId: p.userId })).toList()
   expect<Equal<typeof keys, { userId: number }[]>>()
+
+  // 根查询聚合：decimal 列的和是数值文字，整数列是 number，没有行时都是 null
+  const total = await db.queryable(Post).sum((p) => p.amount)
+  expect<Equal<typeof total, `${number}` | null>>()
+  const oldest = await db.queryable(User).max((u) => u.createdAt)
+  expect<Equal<typeof oldest, Date | null>>()
+  const ageSum = await db.queryable(User).sum((u) => u.age)
+  expect<Equal<typeof ageSum, number | null>>()
+  const distinctUsers = await db.queryable(Post).countDistinct((p) => p.userId)
+  expect<Equal<typeof distinctUsers, number>>()
 }
 void results
+
+// decimal 列可以做算术（数值文字或 number），结果仍是 decimal；普通字符串列不行
+db.update(Post).set((p) => ({ amount: p.amount.times(2) })).where((p) => p.amount.plus('1.5').gt('3'))
+db.queryable(Post).select((p) => ({ doubled: p.amount.times(2), shifted: p.amount.minus(p.amount) }))
 
 // 负例
 db.queryable(User).where((u) => [
@@ -91,7 +105,11 @@ db.queryable(User).where((u) => [
   u.posts.title.eq('x'),
   // @ts-expect-error 年份只能从日期取（date 列是文字，所以字符串列也允许）
   u.age.year().eq(2026),
+  // @ts-expect-error 普通字符串列不能做算术（decimal 列才是数值文字）
+  u.name.plus(1).eq('x'),
 ])
+// @ts-expect-error sum 只接受数值列
+db.queryable(User).sum((u) => u.name)
 // @ts-expect-error 实体不在 schema 里
 db.queryable(Unrelated)
 db.update(User).set({

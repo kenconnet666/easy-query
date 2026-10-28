@@ -3,7 +3,7 @@
  * `u.posts` 是一对多导航（any / count / sum 渲染为关联子查询，toList 在结果里拼成数组）。
  */
 import type { Join, Node, OrderNode, SelectNode } from './ast.ts'
-import { aggregate, aggregateCodec, codecs, condNode, Expr, orderNodes, pred, type Cond, type OrderItem, type Pred } from './expr.ts'
+import { aggregate, aggregateCodec, codecs, condNode, Expr, orderNodes, pred, type Cond, type Numeric, type OrderItem, type Pred } from './expr.ts'
 import type { AnySchema, EntityKey, Many, One, Relation } from './relations.ts'
 import type { Row, ValueOf } from './schema.ts'
 
@@ -157,8 +157,8 @@ export class ManyRef<S extends AnySchema, K extends EntityKey<S>> {
     return new Expr({ k: 'sub', q: this.subquery(filter, () => [{ e: { k: 'agg', fn: 'count', arg: undefined, distinct: false }, as: 'v' }]) }, codecs.int)
   }
 
-  sum<V extends number | bigint | string | null>(value: (r: Ref<S, K>) => Expr<V>): Expr<NonNullable<V> | null> { return this.aggregate('sum', value) }
-  avg<V extends number | bigint | string | null>(value: (r: Ref<S, K>) => Expr<V>): Expr<NonNullable<V> | null> { return this.aggregate('avg', value) }
+  sum<V extends Numeric | null>(value: (r: Ref<S, K>) => Expr<V>): Expr<NonNullable<V> | null> { return this.aggregate('sum', value) }
+  avg<V extends Numeric | null>(value: (r: Ref<S, K>) => Expr<V>): Expr<NonNullable<V> | null> { return this.aggregate('avg', value) }
   max<V>(value: (r: Ref<S, K>) => Expr<V>): Expr<NonNullable<V> | null> { return this.aggregate('max', value) }
   min<V>(value: (r: Ref<S, K>) => Expr<V>): Expr<NonNullable<V> | null> { return this.aggregate('min', value) }
 

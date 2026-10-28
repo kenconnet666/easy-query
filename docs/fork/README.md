@@ -48,3 +48,13 @@ fork 自 [dromara/easy-query](https://github.com/dromara/easy-query)，软 fork�
 - HANA 方言：`sql-db-support/sql-hana`
 - fork 测试：`sql-fork-test`（SQL 文本断言进 CI，`-Plive` 连本地库）
 - 本地测试库：`infra/dev`；上游基线脚本：`tools/upstream-baseline`
+
+## 特性（TS 版，`ts/`）
+
+| 特性 | 页面 |
+|---|---|
+| 根查询聚合、数值算术、批量插入分块 | [ts-aggregates-arithmetic.md](features/ts-aggregates-arithmetic.md) |
+| `caseWhen` 与字符串 / 数学 / 日期 / `cast` 函数 | [ts-functions.md](features/ts-functions.md) |
+| 列类型：decimal.js、64 位整数、`@internationalized/date`、二进制，与 json-wire 对接，扩展点 | [ts-column-types.md](features/ts-column-types.md) |
+| 原生 SQL `db.sql`、执行钩子 `onExecute` | [ts-native-sql-hooks.md](features/ts-native-sql-hooks.md) |
+| 独立测试模块 `@eqts/test` | [ts/packages/test/README.md](../../ts/packages/test/README.md) |

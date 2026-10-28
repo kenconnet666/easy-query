@@ -3,7 +3,7 @@
  * 只适用于某些类型的方法用 `this` 参数限定（例如 like 只能在字符串上调用），用错在编译期报错。
  */
 import type { AggregateFn, BinaryOp, Node, OrderNode } from './ast.ts'
-import { col, type Codec } from './schema.ts'
+import { col, type Codec, type DecimalText } from './schema.ts'
 
 export const codecs = {
   int: col.int().codec,
@@ -14,6 +14,31 @@ export const codecs = {
 
 /** 与 T 比较时右边可以写的值：值本身或同类型的表达式 */
 export type Operand<T> = NonNullable<T> | Expr<NonNullable<T>> | Expr<T>
+
+/**
+ * 第三方数值类型的登记处。@eqts/decimal 之类的扩展包用声明合并把自己的类型加进来，
+ * 之后算术、sum / avg、窗口函数就自动认这个类型，核心不依赖任何第三方库：
+ * ```ts
+ * declare module '@eqts/core' { interface NumericExtensions { decimalJs: Decimal } }
+ * ```
+ */
+export interface NumericExtensions {}
+
+/** 第三方日期时间类型的登记处，用法同 NumericExtensions（@eqts/date 登记 CalendarDate 等） */
+export interface TemporalExtensions {}
+
+/** 可以做算术与 sum / avg 的值类型 */
+export type Numeric = number | bigint | DecimalText | NumericExtensions[keyof NumericExtensions]
+
+/** 可以取年 / 月 / 日的值类型（string 是 date 列的 'YYYY-MM-DD'，精确区分留给后续的 Expr 类型门面） */
+export type Temporal = Date | string | TemporalExtensions[keyof TemporalExtensions]
+
+/**
+ * 算术右操作数：与左边同类型的值或表达式。
+ * 十进制文字列和第三方数值类型（如 decimal.js 的 Decimal）额外接受 number，写 `amount.times(2)` 更顺手；
+ * bigint 列只接受 bigint，避免把浮点数混进 64 位整数运算。
+ */
+export type Arith<T> = Operand<T> | (NonNullable<T> extends DecimalText | NumericExtensions[keyof NumericExtensions] ? number : never)
 
 /** T 可空时结果也可空 */
 type Keep<T, R> = null extends T ? R | null : R
@@ -76,14 +101,100 @@ export class Expr<T> {
     return new Expr({ k: 'fn', name: 'concat', args: [this.node, ...parts.map((p) => toNode(p, codecs.string))] }, this.codec)
   }
 
-  plus(this: Expr<number | null>, value: number | Expr<number | null>): Expr<T> { return this.arith('+', value) as Expr<T> }
-  minus(this: Expr<number | null>, value: number | Expr<number | null>): Expr<T> { return this.arith('-', value) as Expr<T> }
-  times(this: Expr<number | null>, value: number | Expr<number | null>): Expr<T> { return this.arith('*', value) as Expr<T> }
-  div(this: Expr<number | null>, value: number | Expr<number | null>): Expr<T> { return this.arith('/', value) as Expr<T> }
+  // 算术：接收者可以是任何数值类型（number / bigint / 十进制文字 / 通过 NumericExtensions 登记的第三方类型）
+  plus(this: Expr<Numeric | null>, value: Arith<T>): Expr<T> { return this.arith('+', value) as Expr<T> }
+  minus(this: Expr<Numeric | null>, value: Arith<T>): Expr<T> { return this.arith('-', value) as Expr<T> }
+  times(this: Expr<Numeric | null>, value: Arith<T>): Expr<T> { return this.arith('*', value) as Expr<T> }
+  div(this: Expr<Numeric | null>, value: Arith<T>): Expr<T> { return this.arith('/', value) as Expr<T> }
 
-  year(this: Expr<Date | string | null>): Expr<Keep<T, number>> { return new Expr({ k: 'fn', name: 'year', args: [this.node] }, codecs.int) }
-  month(this: Expr<Date | string | null>): Expr<Keep<T, number>> { return new Expr({ k: 'fn', name: 'month', args: [this.node] }, codecs.int) }
-  day(this: Expr<Date | string | null>): Expr<Keep<T, number>> { return new Expr({ k: 'fn', name: 'day', args: [this.node] }, codecs.int) }
+  year(this: Expr<Temporal | null>): Expr<Keep<T, number>> { return new Expr({ k: 'fn', name: 'year', args: [this.node] }, codecs.int) }
+  month(this: Expr<Temporal | null>): Expr<Keep<T, number>> { return new Expr({ k: 'fn', name: 'month', args: [this.node] }, codecs.int) }
+  day(this: Expr<Temporal | null>): Expr<Keep<T, number>> { return new Expr({ k: 'fn', name: 'day', args: [this.node] }, codecs.int) }
+
+  // ---- 字符串函数（写法由各方言的函数表决定） ----
+
+  /** 子串：下标按 JS 的 substring，从 start（含）到 end（不含），0 起；省略 end 取到末尾 */
+  substring(this: Expr<string | null>, start: number, end?: number): Expr<T> {
+    const from = nonNegativeInt(start, 'substring start')
+    const args: Node[] = [this.node, intLit(from + 1)]
+    if (end !== undefined) {
+      const to = nonNegativeInt(end, 'substring end')
+      // JS 的 substring 会悄悄交换两个下标；这里直接报错，免得把写反了的下标当成正确结果
+      if (to < from) throw new RangeError(`substring end (${to}) must not be less than start (${from})`)
+      args.push(intLit(to - from))
+    }
+    return new Expr({ k: 'fn', name: 'substring', args }, this.codec)
+  }
+
+  /** 把所有 search 替换成 replacement */
+  replace(this: Expr<string | null>, search: string, replacement: string): Expr<T> {
+    return new Expr({ k: 'fn', name: 'replace', args: [this.node, this.operand(search), this.operand(replacement)] }, this.codec)
+  }
+
+  /** text 第一次出现的位置，0 起；没有时为 -1（与 JS 的 indexOf 一致） */
+  indexOf(this: Expr<string | null>, text: string): Expr<Keep<T, number>> {
+    return new Expr({ k: 'fn', name: 'index_of', args: [this.node, this.operand(text)] }, codecs.int)
+  }
+
+  /** 前 n 个字符 */
+  left(this: Expr<string | null>, n: number): Expr<T> {
+    return new Expr({ k: 'fn', name: 'left', args: [this.node, intLit(nonNegativeInt(n, 'left length'))] }, this.codec)
+  }
+
+  /** 后 n 个字符 */
+  right(this: Expr<string | null>, n: number): Expr<T> {
+    return new Expr({ k: 'fn', name: 'right', args: [this.node, intLit(nonNegativeInt(n, 'right length'))] }, this.codec)
+  }
+
+  // ---- 数学函数 ----
+
+  abs(this: Expr<Numeric | null>): Expr<T> { return this.fn('abs') as Expr<T> }
+  floor(this: Expr<Numeric | null>): Expr<T> { return this.fn('floor') as Expr<T> }
+  ceil(this: Expr<Numeric | null>): Expr<T> { return this.fn('ceil') as Expr<T> }
+
+  /** 四舍五入到 digits 位小数（默认取整） */
+  round(this: Expr<Numeric | null>, digits = 0): Expr<T> {
+    return new Expr({ k: 'fn', name: 'round', args: [this.node, intLit(nonNegativeInt(digits, 'round digits'))] }, this.codec)
+  }
+
+  /** 取余 */
+  mod(this: Expr<Numeric | null>, divisor: Arith<T>): Expr<T> {
+    return new Expr({ k: 'fn', name: 'mod', args: [this.node, this.operand(divisor)] }, this.codec)
+  }
+
+  // ---- 日期函数 ----
+
+  /** 加 n 天（n 可为负）。SQLite 的结果不带毫秒 */
+  addDays(this: Expr<Temporal | null>, n: number): Expr<T> {
+    return new Expr({ k: 'fn', name: 'add_days', args: [this.node, intLit(safeInt(n, 'addDays'))] }, this.codec)
+  }
+
+  /** 加 n 个月（n 可为负）；月末按各库自己的规则收敛（如 1 月 31 日加 1 个月） */
+  addMonths(this: Expr<Temporal | null>, n: number): Expr<T> {
+    return new Expr({ k: 'fn', name: 'add_months', args: [this.node, intLit(safeInt(n, 'addMonths'))] }, this.codec)
+  }
+
+  /** 与 other 相差的整天数（本值减 other，只看日期部分） */
+  diffDays(this: Expr<Temporal | null>, other: Operand<T>): Expr<Keep<T, number>> {
+    return new Expr({ k: 'fn', name: 'diff_days', args: [this.node, this.operand(other)] }, codecs.int)
+  }
+
+  // ---- 通用 ----
+
+  /** 与 value 相等时得到 NULL（NULLIF） */
+  nullIf(value: Operand<T>): Expr<T | null> {
+    return new Expr({ k: 'fn', name: 'nullif', args: [this.node, this.operand(value)] }, this.codec)
+  }
+
+  /**
+   * 类型转换（CAST）。decimal 要给精度与小数位：`x.cast('decimal', 12, 2)`。
+   * 各库的类型名不同（MySQL 的整数是 SIGNED、字符串是 CHAR），由方言函数表翻译。
+   */
+  cast<K extends keyof CastTypes>(type: K, precision?: number, scale?: number): Expr<Keep<T, CastTypes[K]>> {
+    const args: Node[] = [this.node]
+    if (type === 'decimal') args.push(intLit(nonNegativeInt(precision ?? 38, 'cast precision')), intLit(nonNegativeInt(scale ?? 10, 'cast scale')))
+    return new Expr({ k: 'fn', name: `cast_${type}`, args }, castCodecs[type])
+  }
 
   /** 把值转成参数节点，用本表达式的编码 */
   operand(value: unknown): Node {
@@ -109,6 +220,92 @@ export class Expr<T> {
 }
 
 export type Pred = Expr<boolean>
+
+/** cast 的目标类型 → 转换后的 JS 类型 */
+export interface CastTypes {
+  string: string
+  int: number
+  bigint: number
+  double: number
+  decimal: DecimalText
+  date: string
+  datetime: Date
+}
+
+const castCodecs: Record<keyof CastTypes, Codec<any>> = {
+  string: col.string().codec,
+  int: col.int().codec,
+  bigint: col.bigint().codec,
+  double: col.double().codec,
+  decimal: col.decimal().codec,
+  date: col.date().codec,
+  datetime: col.datetime().codec,
+}
+
+/** 受信任的整数字面量：函数的位置、长度等参数直接写进 SQL，不占绑定参数（PG 的 SUBSTRING 等对参数类型很挑） */
+function intLit(n: number): Node {
+  return { k: 'lit', sql: String(n) }
+}
+
+function safeInt(n: number, what: string): number {
+  if (!Number.isSafeInteger(n)) throw new RangeError(`${what} must be an integer, got ${n}`)
+  return n
+}
+
+function nonNegativeInt(n: number, what: string): number {
+  if (!Number.isSafeInteger(n) || n < 0) throw new RangeError(`${what} must be a non-negative integer, got ${n}`)
+  return n
+}
+
+/**
+ * CASE WHEN 的构建器。结果类型是各分支值类型的并集：
+ * ```ts
+ * caseWhen(u.age.lt(18), 'minor').when(u.age.lt(65), 'adult').else('senior')   // Expr<string>
+ * caseWhen(u.age.isNull(), 0).end()                                           // 没有 ELSE：不匹配时为 NULL，Expr<number | null>
+ * ```
+ */
+export class CaseBuilder<T> {
+  private readonly branches: readonly (readonly [Node, Node])[]
+  private readonly codec: Codec<any> | undefined
+
+  constructor(branches: readonly (readonly [Node, Node])[], codec: Codec<any> | undefined) {
+    this.branches = branches
+    this.codec = codec
+  }
+
+  when<V>(condition: Pred, value: V | Expr<V>): CaseBuilder<T | V> {
+    const [node, codec] = branchValue(value)
+    return new CaseBuilder<T | V>([...this.branches, [condition.node, node]], this.codec ?? codec)
+  }
+
+  /** 以 ELSE 结束 */
+  else<V>(value: V | Expr<V>): Expr<T | V> {
+    const [node, codec] = branchValue(value)
+    return new Expr({ k: 'case', when: this.branches, else: node }, this.codec ?? codec)
+  }
+
+  /** 不写 ELSE 就结束：没有分支命中时为 NULL */
+  end(): Expr<T | null> {
+    return new Expr({ k: 'case', when: this.branches, else: undefined }, this.codec)
+  }
+}
+
+/** 从 `when` 条件开始一个 CASE 表达式 */
+export function caseWhen<V>(condition: Pred, value: V | Expr<V>): CaseBuilder<V> {
+  const [node, codec] = branchValue(value)
+  return new CaseBuilder<V>([[condition.node, node]], codec)
+}
+
+/** 分支值 → 节点与读结果用的解码：表达式沿用自己的；字面量按 JS 类型选 */
+function branchValue(value: unknown): [Node, Codec<any> | undefined] {
+  if (value instanceof Expr) return [value.node, value.codec]
+  const codec = typeof value === 'string' ? codecs.string
+    : typeof value === 'number' ? codecs.double
+      : typeof value === 'boolean' ? codecs.boolean
+        : value instanceof Date ? col.datetime().codec
+          : undefined
+  return [{ k: 'param', value, codec: undefined }, codec]
+}
 
 export class Order {
   readonly node: OrderNode

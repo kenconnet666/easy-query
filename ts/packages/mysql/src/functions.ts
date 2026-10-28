@@ -47,6 +47,15 @@ function nonEmpty<T>(items: T[]): T[] {
 
 /** 加进 MySQL 方言的函数表 */
 export const mysqlFunctions: Record<string, FunctionRenderer> = {
+  // 通用函数里与标准写法不同的部分
+  add_days: (a) => `DATE_ADD(${a[0]}, INTERVAL ${a[1]} DAY)`,
+  add_months: (a) => `DATE_ADD(${a[0]}, INTERVAL ${a[1]} MONTH)`,
+  diff_days: (a) => `DATEDIFF(${a[0]}, ${a[1]})`,
+  cast_string: (a) => `CAST(${a[0]} AS CHAR)`,
+  cast_int: (a) => `CAST(${a[0]} AS SIGNED)`,
+  cast_bigint: (a) => `CAST(${a[0]} AS SIGNED)`,
+  cast_double: (a) => `CAST(${a[0]} AS DOUBLE)`,
+  cast_datetime: (a) => `CAST(${a[0]} AS DATETIME)`,
   'mysql.json_contains': (a) => `JSON_CONTAINS(${a.join(', ')})`,
   'mysql.json_overlaps': (a) => `JSON_OVERLAPS(${a[0]}, ${a[1]})`,
   'mysql.member_of': (a) => `${a[0]} MEMBER OF(${a[1]})`,
