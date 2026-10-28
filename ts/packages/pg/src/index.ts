@@ -16,6 +16,8 @@ export { Pg } from './functions.ts'
 
 export class PostgresDialect extends Dialect {
   readonly name = 'postgres'
+  /** PG 协议里参数个数是 16 位整数，最多 65535 */
+  override readonly maxBindParams = 65535
   override readonly generatedKeys = 'returning' as const
 
   override placeholder(index: number): string {

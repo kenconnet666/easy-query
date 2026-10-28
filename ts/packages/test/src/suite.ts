@@ -280,4 +280,54 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>): void {
       ])
     })
   })
+
+  describe(`${name}: root aggregates, decimal arithmetic and insert chunking`, () => {
+    it('aggregates a whole query without groupBy', async () => {
+      const { db } = await seeded()
+      // 种子里四篇帖子的金额：10.50 + 2000.00 + 1.25 + 3.00
+      assert.equal(Number(await db.queryable(Post).sum((p) => p.amount)), 2014.75)
+      assert.equal(Number(await db.queryable(Post).max((p) => p.amount)), 2000)
+      assert.equal(Number(await db.queryable(Post).min((p) => p.amount)), 1.25)
+      assert.equal(Number(await db.queryable(Post).avg((p) => p.amount)), 2014.75 / 4)
+      assert.equal(await db.queryable(Post).countDistinct((p) => p.userId), 2)
+      // where 条件照常生效；排序被丢掉，不会让 PG 报"ORDER BY 不在聚合里"
+      assert.equal(Number(await db.queryable(Post).where((p) => p.userId.eq(2)).orderBy((p) => p.id).sum((p) => p.amount)), 4.25)
+      assert.equal(await db.queryable(User).sum((u) => u.age), 47)
+    })
+
+    it('returns null for aggregates over no rows', async () => {
+      const { db } = await seeded()
+      const none = db.queryable(Post).where((p) => p.userId.eq(999))
+      assert.equal(await none.sum((p) => p.amount), null)
+      assert.equal(await none.max((p) => p.amount), null)
+      assert.equal(await none.countDistinct((p) => p.userId), 0)
+    })
+
+    it('refuses aggregates combined with limit', async () => {
+      const { db } = await seeded()
+      await assert.rejects(() => db.queryable(Post).limit(2).sum((p) => p.amount), /limit/)
+    })
+
+    it('does arithmetic on decimal columns with numbers, decimal text and other columns', async () => {
+      const { db } = await seeded()
+      const rows = await db.queryable(Post).orderBy((p) => p.id).select((p) => ({
+        doubled: p.amount.times(2),
+        plusText: p.amount.plus('0.50'),
+        self: p.amount.minus(p.amount),
+      })).toList()
+      assert.deepEqual(rows.map((r) => [Number(r.doubled), Number(r.plusText), Number(r.self)]), [
+        [21, 11, 0], [4000, 2000.5, 0], [2.5, 1.75, 0], [6, 3.5, 0],
+      ])
+      await db.update(Post).set((p) => ({ amount: p.amount.plus(1) })).where((p) => p.id.eq(3)).execute()
+      assert.equal(Number((await db.queryable(Post).where((p) => p.id.eq(3)).single()).amount), 2.25)
+    })
+
+    it('inserts many rows, splitting them into statements below the parameter limit', async () => {
+      const { db } = await seeded()
+      // 3 列 × 12000 行 = 36000 个参数，超过 SQLite 的 32766，必须分块；其它库一次也能装下，结果一致
+      const rows = Array.from({ length: 12000 }, (_, i) => ({ userId: 1, title: `bulk ${i}`, amount: '1.00' as const }))
+      assert.equal(await db.insert(Post).values(rows).execute(), 12000)
+      assert.equal(await db.queryable(Post).where((p) => p.title.startsWith('bulk ')).count(), 12000)
+    })
+  })
 }

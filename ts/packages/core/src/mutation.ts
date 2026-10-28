@@ -118,17 +118,23 @@ export class InsertValues<S extends AnySchema, K extends EntityKey<S>> {
       if (!group) groups.set(id, (group = []))
       group.push(row)
     }
-    return [...groups].map(([id, rows]) => {
+    return [...groups].flatMap(([id, rows]) => {
       const props = id === '' ? [] : id.split(',')
       if (props.length === 0) throw new Error(`insert into ${this.entity.table} has no values`)
-      const w = new SqlWriter()
-      const sql = this.ctx.dialect.insert({
-        table: this.entity.table,
-        columns: props.map((p) => this.entity.columnNames[p]!),
-        rows: rows.map((r) => props.map((p) => toNode(r[p], this.entity.columns[p]!.codec))),
-        conflict: this.conflict,
-      }, w)
-      return { sql, params: w.params }
+      // 每行占 props.length 个参数；按方言的绑定参数上限切块，一块一条语句（至少一行）
+      const perStatement = Math.max(1, Math.floor(this.ctx.dialect.maxBindParams / props.length))
+      const statements: Statement[] = []
+      for (let from = 0; from < rows.length; from += perStatement) {
+        const w = new SqlWriter()
+        const sql = this.ctx.dialect.insert({
+          table: this.entity.table,
+          columns: props.map((p) => this.entity.columnNames[p]!),
+          rows: rows.slice(from, from + perStatement).map((r) => props.map((p) => toNode(r[p], this.entity.columns[p]!.codec))),
+          conflict: this.conflict,
+        }, w)
+        statements.push({ sql, params: w.params })
+      }
+      return statements
     })
   }
 }

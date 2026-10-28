@@ -3,7 +3,7 @@
  * 只适用于某些类型的方法用 `this` 参数限定（例如 like 只能在字符串上调用），用错在编译期报错。
  */
 import type { AggregateFn, BinaryOp, Node, OrderNode } from './ast.ts'
-import { col, type Codec } from './schema.ts'
+import { col, type Codec, type DecimalText } from './schema.ts'
 
 export const codecs = {
   int: col.int().codec,
@@ -14,6 +14,27 @@ export const codecs = {
 
 /** 与 T 比较时右边可以写的值：值本身或同类型的表达式 */
 export type Operand<T> = NonNullable<T> | Expr<NonNullable<T>> | Expr<T>
+
+/**
+ * 第三方数值类型的登记处。@eqts/decimal 之类的扩展包用声明合并把自己的类型加进来，
+ * 之后算术、sum / avg、窗口函数就自动认这个类型，核心不依赖任何第三方库：
+ * ```ts
+ * declare module '@eqts/core' { interface NumericExtensions { decimalJs: Decimal } }
+ * ```
+ */
+export interface NumericExtensions {}
+
+/** 第三方日期时间类型的登记处，用法同 NumericExtensions（@eqts/date 登记 CalendarDate 等） */
+export interface TemporalExtensions {}
+
+/** 可以做算术与 sum / avg 的值类型 */
+export type Numeric = number | bigint | DecimalText | NumericExtensions[keyof NumericExtensions]
+
+/** 可以取年 / 月 / 日的值类型（string 是 date 列的 'YYYY-MM-DD'，精确区分留给后续的 Expr 类型门面） */
+export type Temporal = Date | string | TemporalExtensions[keyof TemporalExtensions]
+
+/** 算术右操作数：与左边同类型的值或表达式；十进制文字列额外接受 number，写 `amount.times(2)` 更顺手 */
+export type Arith<T> = Operand<T> | (NonNullable<T> extends DecimalText ? number : never)
 
 /** T 可空时结果也可空 */
 type Keep<T, R> = null extends T ? R | null : R
@@ -76,14 +97,15 @@ export class Expr<T> {
     return new Expr({ k: 'fn', name: 'concat', args: [this.node, ...parts.map((p) => toNode(p, codecs.string))] }, this.codec)
   }
 
-  plus(this: Expr<number | null>, value: number | Expr<number | null>): Expr<T> { return this.arith('+', value) as Expr<T> }
-  minus(this: Expr<number | null>, value: number | Expr<number | null>): Expr<T> { return this.arith('-', value) as Expr<T> }
-  times(this: Expr<number | null>, value: number | Expr<number | null>): Expr<T> { return this.arith('*', value) as Expr<T> }
-  div(this: Expr<number | null>, value: number | Expr<number | null>): Expr<T> { return this.arith('/', value) as Expr<T> }
+  // 算术：接收者可以是任何数值类型（number / bigint / 十进制文字 / 通过 NumericExtensions 登记的第三方类型）
+  plus(this: Expr<Numeric | null>, value: Arith<T>): Expr<T> { return this.arith('+', value) as Expr<T> }
+  minus(this: Expr<Numeric | null>, value: Arith<T>): Expr<T> { return this.arith('-', value) as Expr<T> }
+  times(this: Expr<Numeric | null>, value: Arith<T>): Expr<T> { return this.arith('*', value) as Expr<T> }
+  div(this: Expr<Numeric | null>, value: Arith<T>): Expr<T> { return this.arith('/', value) as Expr<T> }
 
-  year(this: Expr<Date | string | null>): Expr<Keep<T, number>> { return new Expr({ k: 'fn', name: 'year', args: [this.node] }, codecs.int) }
-  month(this: Expr<Date | string | null>): Expr<Keep<T, number>> { return new Expr({ k: 'fn', name: 'month', args: [this.node] }, codecs.int) }
-  day(this: Expr<Date | string | null>): Expr<Keep<T, number>> { return new Expr({ k: 'fn', name: 'day', args: [this.node] }, codecs.int) }
+  year(this: Expr<Temporal | null>): Expr<Keep<T, number>> { return new Expr({ k: 'fn', name: 'year', args: [this.node] }, codecs.int) }
+  month(this: Expr<Temporal | null>): Expr<Keep<T, number>> { return new Expr({ k: 'fn', name: 'month', args: [this.node] }, codecs.int) }
+  day(this: Expr<Temporal | null>): Expr<Keep<T, number>> { return new Expr({ k: 'fn', name: 'day', args: [this.node] }, codecs.int) }
 
   /** 把值转成参数节点，用本表达式的编码 */
   operand(value: unknown): Node {

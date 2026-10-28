@@ -14,6 +14,10 @@ export class SqlWriter {
   readonly params: unknown[] = []
 
   bind(dialect: Dialect, value: unknown): string {
+    // 超出数据库的占位符上限时，在发给数据库之前报出清楚的错误（而不是一句 "too many placeholders"）
+    if (this.params.length >= dialect.maxBindParams) {
+      throw new Error(`statement binds more than ${dialect.maxBindParams} parameters, the limit of the ${dialect.name} dialect; split the in-list or the batch into several statements`)
+    }
     this.params.push(value)
     return dialect.placeholder(this.params.length)
   }
@@ -40,6 +44,9 @@ export abstract class Dialect {
       day: (a) => `EXTRACT(DAY FROM ${a[0]})`,
     }
   }
+
+  /** 一条语句最多能绑定多少个参数；多行插入据此自动分块。默认取各库里最小的常见上限（SQLite 32766） */
+  readonly maxBindParams: number = 32766
 
   /** 单行插入后怎么拿自增主键：驱动直接返回（SQLite、MySQL），或 INSERT … RETURNING 主键（PG） */
   readonly generatedKeys: 'driver' | 'returning' = 'driver'

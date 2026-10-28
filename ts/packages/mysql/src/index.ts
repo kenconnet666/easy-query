@@ -19,6 +19,8 @@ const NO_LIMIT = '18446744073709551615'
 
 export class MySqlDialect extends Dialect {
   readonly name = 'mysql'
+  /** MySQL 预处理语句最多 65535 个占位符 */
+  override readonly maxBindParams = 65535
 
   /** MySQL.json / MySQL.match 的函数（见 functions.ts） */
   protected override functions(): Record<string, FunctionRenderer> {

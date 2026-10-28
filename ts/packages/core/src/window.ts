@@ -11,7 +11,7 @@
  * 不传窗口（或 {@code w => w}）就是全表一个窗口：{@code OVER ()}。
  */
 import type { Node, OrderNode } from './ast.ts'
-import { aggregateCodec, codecs, Expr, orderNodes, type OrderItem } from './expr.ts'
+import { aggregateCodec, codecs, Expr, orderNodes, type Numeric, type OrderItem } from './expr.ts'
 
 /** frame 的一端；偏移量写进 SQL，只接受非负整数 */
 export type Bound = 'unboundedPreceding' | 'currentRow' | 'unboundedFollowing' | { readonly preceding: number } | { readonly following: number }
@@ -77,9 +77,9 @@ export const win = {
   ntile: (buckets: number, spec?: Spec) => over<number>(lit(`NTILE(${positive(buckets, 'ntile buckets')})`), spec, codecs.int),
   count: (value?: Expr<unknown>, spec?: Spec) =>
     over<number>({ k: 'agg', fn: 'count', arg: value?.node, distinct: false }, spec, codecs.int),
-  sum: <V extends number | bigint | string | null>(value: Expr<V>, spec?: Spec) =>
+  sum: <V extends Numeric | null>(value: Expr<V>, spec?: Spec) =>
     over<NonNullable<V> | null>({ k: 'agg', fn: 'sum', arg: value.node, distinct: false }, spec, aggregateCodec('sum', value)),
-  avg: <V extends number | bigint | string | null>(value: Expr<V>, spec?: Spec) =>
+  avg: <V extends Numeric | null>(value: Expr<V>, spec?: Spec) =>
     over<NonNullable<V> | null>({ k: 'agg', fn: 'avg', arg: value.node, distinct: false }, spec, aggregateCodec('avg', value)),
   max: <V>(value: Expr<V>, spec?: Spec) => over<NonNullable<V> | null>({ k: 'agg', fn: 'max', arg: value.node, distinct: false }, spec, value.codec),
   min: <V>(value: Expr<V>, spec?: Spec) => over<NonNullable<V> | null>({ k: 'agg', fn: 'min', arg: value.node, distinct: false }, spec, value.codec),

@@ -66,6 +66,12 @@ export class Column<T, N extends boolean = false, O extends boolean = false> {
   }
 }
 
+/**
+ * 十进制数文字：decimal 列在 JS 里的类型。用模板字面量类型而不是 string，
+ * 一是让 `'10.50'` 这样的字面量可以直接写入，二是让算术方法能区分"数值文字"和普通字符串。
+ */
+export type DecimalText = `${number}`
+
 const SAFE_MAX = BigInt(Number.MAX_SAFE_INTEGER)
 
 function codec<T>(kind: ColumnKind, decode: (raw: unknown) => T, encode: (value: T) => unknown = (v) => v): Codec<T> {
@@ -92,7 +98,11 @@ export function utcText(d: Date): string {
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}.${pad(d.getUTCMilliseconds(), 3)}`
 }
 
-function toDate(raw: unknown): Date {
+/**
+ * 驱动读出的日期时间 → Date（无时区的文字按 UTC 读）。
+ * 导出给 @eqts/date 等扩展列类型复用，保证各种日期类型"驱动值怎么读"的口径一致。
+ */
+export function toDate(raw: unknown): Date {
   if (raw instanceof Date) return raw
   const text = String(raw)
   // 'YYYY-MM-DD HH:MM:SS[.fff]' 按 UTC 读；带偏移的（PG timestamptz 的 '+00'、'+08:00'）按偏移读
@@ -103,7 +113,8 @@ function toDate(raw: unknown): Date {
   return new Date(iso + 'Z')
 }
 
-function toDateText(raw: unknown): string {
+/** 驱动读出的日期 → 'YYYY-MM-DD'（按 UTC 取年月日，不经过本地时区） */
+export function toDateText(raw: unknown): string {
   if (raw instanceof Date) return `${raw.getUTCFullYear()}-${pad(raw.getUTCMonth() + 1)}-${pad(raw.getUTCDate())}`
   return String(raw).slice(0, 10)
 }
@@ -123,8 +134,8 @@ export const col = {
     const decode = (r: unknown): V => (mode === 'bigint' ? BigInt(r as string) : mode === 'string' ? String(r) : toNumber(r)) as V
     return base(codec<V>('bigint', decode))
   },
-  /** 精确小数：JS 里是文字，不经过浮点 */
-  decimal: (_precision?: number, _scale?: number) => base(codec<string>('decimal', (r) => String(r))),
+  /** 精确小数：JS 里是数值文字（DecimalText），不经过浮点；要对象形式可用 @eqts/decimal 的 decimalJs() */
+  decimal: (_precision?: number, _scale?: number) => base(codec<DecimalText>('decimal', (r) => String(r) as DecimalText)),
   double: () => base(codec<number>('double', (r) => Number(r))),
   /** 绑定时交给方言转换（SQLite / MySQL 写 1 / 0，PG 原样传布尔） */
   boolean: () => base(codec<boolean>('boolean', (r) => r === true || r === 1 || r === '1' || r === 1n || r === 't')),
