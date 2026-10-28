@@ -229,6 +229,40 @@ function base<T>(c: Codec<T>, extra: Partial<ColumnOptions> = {}): Column<T, fal
   return new Column(c, { nullable: false, primaryKey: false, generated: false, hasDefault: false, ...extra })
 }
 
+/**
+ * Standard Schema（https://standardschema.dev）的最小子集：只依赖 `~standard.validate`，不引入任何校验库。
+ * zod ≥3.24、valibot、arktype 等都实现了它。
+ */
+export interface StandardSchema<Output = unknown> {
+  readonly '~standard': {
+    readonly version: 1
+    readonly vendor: string
+    readonly validate: (value: unknown) => { readonly value: Output; readonly issues?: undefined } | { readonly issues: readonly { readonly message: string; readonly path?: readonly unknown[] | undefined }[] } | Promise<unknown>
+    /** 仅类型用：校验器的输出类型 */
+    readonly types?: { readonly input: unknown; readonly output: Output } | undefined
+  }
+}
+
+/** 同步校验：不合格或校验器是异步的都抛错 */
+function validated<T>(schema: StandardSchema<T>, value: unknown, what: string): T {
+  const result = schema['~standard'].validate(value)
+  if (result instanceof Promise) throw new TypeError(`${what}: asynchronous schemas are not supported for json columns`)
+  const r = result as { value?: T; issues?: readonly { message: string; path?: readonly unknown[] | undefined }[] }
+  if (r.issues) {
+    const list = r.issues.map((i) => (i.path && i.path.length > 0 ? `${i.path.map(String).join('.')}: ${i.message}` : i.message)).join('; ')
+    throw new TypeError(`${what}: invalid JSON value: ${list}`)
+  }
+  return r.value as T
+}
+
+function jsonColumn<T = unknown>(): Column<T, false, false>
+function jsonColumn<S extends StandardSchema>(schema: S): Column<S extends StandardSchema<infer O> ? O : never, false, false>
+function jsonColumn(schema?: StandardSchema): Column<unknown, false, false> {
+  const parse = (r: unknown): unknown => (typeof r === 'string' ? JSON.parse(r) : r)
+  if (!schema) return base(codec<unknown>('json', parse, (v) => JSON.stringify(v)))
+  return base(codec<unknown>('json', (r) => validated(schema, parse(r), 'read'), (v) => JSON.stringify(validated(schema, v, 'write'))))
+}
+
 /** 列的类型 */
 export const col = {
   /** 字符串；length 只在建表时用（默认 255） */
@@ -254,7 +288,12 @@ export const col = {
   datetime: () => base(codec<Date>('datetime', toDate, (v) => utcText(v))),
   /** 二进制：JS 里是 Uint8Array（驱动给的 Buffer 会复制成普通的 Uint8Array），库里是 BLOB / BYTEA */
   bytes: () => base(codec<Uint8Array>('bytes', (r) => (typeof r === 'string' ? hexToBytes(r) : new Uint8Array(r as ArrayLike<number>)))),
-  json: <T>() => base(codec<T>('json', (r) => (typeof r === 'string' ? JSON.parse(r) : r) as T, (v) => JSON.stringify(v))),
+  /**
+   * JSON 列。只写泛型时不校验（`col.json<Tags>()`）；传入符合 Standard Schema 的校验器（zod、valibot、arktype 等）时，
+   * 类型取自校验器的输出，读出和写入都会校验，不合格抛错并带上问题列表：`col.json(z.object({ tags: z.array(z.string()) }))`。
+   * 校验器必须是同步的。
+   */
+  json: jsonColumn,
   /** 字符串枚举：写入和读出都校验在列表里，TS 类型是这些字面量的并集 */
   enum: <const V extends string>(values: readonly V[]) => {
     const check = (v: unknown): V => {

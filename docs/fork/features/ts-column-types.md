@@ -61,3 +61,17 @@ declare module '@eqts/core' { interface NumericExtensions { money: Money } }
 - HANA 未验证这些类型（建表语句未加进 HANA 实库套件）。
 - `Time` 不登记到 `TemporalExtensions`（没有年月日）。
 - 直接写 `db.sql\`…\`` 读出的是驱动原始值，不经过列 codec。
+
+## JSON 列与 Standard Schema
+
+```ts
+import { z } from 'zod'      // 或 valibot、arktype：任何实现了 Standard Schema 的校验器
+const Profile = z.object({ tags: z.array(z.string()), level: z.number().int().min(0) })
+const Account = entity('t_account', { id: col.bigint().primaryKey().generated(), profile: col.json(Profile) })
+// 行类型里 profile 的类型取自校验器：{ tags: string[]; level: number }
+```
+
+- **读出和写入都校验**：写入不合格在发 SQL 之前抛错，读出时库里的旧数据不再符合 schema 也会抛错，消息带上失败的路径（`write: invalid JSON value: level: …`）。
+- 只依赖协议里的 `~standard.validate`（核心不引入任何校验库，接口在 `@eqts/core` 里以 `StandardSchema` 导出）；**校验器必须是同步的**，异步的会明确报错。
+- 只写泛型的 `col.json<Tags>()` 仍然可用，不做运行时校验。
+- 用 zod 4.6.7 验证过（zod 只是测试的开发依赖）。

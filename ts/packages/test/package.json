@@ -16,6 +16,7 @@
   },
   "devDependencies": {
     "decimal.js": "10.6.0",
-    "@internationalized/date": "3.12.4"
+    "@internationalized/date": "3.12.4",
+    "zod": "4.6.7"
   }
 }
