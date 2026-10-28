@@ -42,7 +42,39 @@ export abstract class Dialect {
       year: (a) => `EXTRACT(YEAR FROM ${a[0]})`,
       month: (a) => `EXTRACT(MONTH FROM ${a[0]})`,
       day: (a) => `EXTRACT(DAY FROM ${a[0]})`,
+      // 字符串：substring 的位置、长度已经是 1 起的整数字面量
+      substring: (a) => `SUBSTRING(${a.join(', ')})`,
+      replace: (a) => `REPLACE(${a.join(', ')})`,
+      index_of: (a) => `(POSITION(${a[1]} IN ${a[0]}) - 1)`,
+      left: (a) => `LEFT(${a[0]}, ${a[1]})`,
+      right: (a) => `RIGHT(${a[0]}, ${a[1]})`,
+      // 数学
+      abs: (a) => `ABS(${a[0]})`,
+      floor: (a) => `FLOOR(${a[0]})`,
+      ceil: (a) => `CEIL(${a[0]})`,
+      round: (a) => `ROUND(${a[0]}, ${a[1]})`,
+      mod: (a) => `MOD(${a[0]}, ${a[1]})`,
+      nullif: (a) => `NULLIF(${a[0]}, ${a[1]})`,
+      // 日期：天数 / 月数是整数字面量。基类按 PG 的区间写法，其它库覆盖
+      add_days: (a) => `(${a[0]} + INTERVAL '${a[1]} day')`,
+      add_months: (a) => `(${a[0]} + INTERVAL '${a[1]} month')`,
+      diff_days: (a) => `(CAST(${a[0]} AS DATE) - CAST(${a[1]} AS DATE))`,
+      // 类型转换：基类用标准类型名，各库差异覆盖
+      cast_string: (a) => `CAST(${a[0]} AS VARCHAR(4000))`,
+      cast_int: (a) => `CAST(${a[0]} AS INTEGER)`,
+      cast_bigint: (a) => `CAST(${a[0]} AS BIGINT)`,
+      cast_double: (a) => `CAST(${a[0]} AS DOUBLE PRECISION)`,
+      cast_decimal: (a) => `CAST(${a[0]} AS DECIMAL(${a[1]}, ${a[2]}))`,
+      cast_date: (a) => `CAST(${a[0]} AS DATE)`,
+      cast_datetime: (a) => `CAST(${a[0]} AS TIMESTAMP)`,
     }
+  }
+
+  /**
+   * CASE 分支里的值。默认原样渲染；PG 这类不能从上下文推断参数类型的库覆盖它，给参数加类型转换。
+   */
+  protected caseValue(n: Node, w: SqlWriter): string {
+    return this.node(n, w)
   }
 
   /** 一条语句最多能绑定多少个参数；多行插入据此自动分块。默认取各库里最小的常见上限（SQLite 32766） */
@@ -157,8 +189,8 @@ export abstract class Dialect {
         return `${n.fn.toUpperCase()}(${n.distinct ? 'DISTINCT ' : ''}${arg})`
       }
       case 'case': {
-        const whens = n.when.map(([c, t]) => ` WHEN ${this.node(c, w)} THEN ${this.node(t, w)}`).join('')
-        return `CASE${whens}${n.else ? ` ELSE ${this.node(n.else, w)}` : ''} END`
+        const whens = n.when.map(([c, t]) => ` WHEN ${this.node(c, w)} THEN ${this.caseValue(t, w)}`).join('')
+        return `CASE${whens}${n.else ? ` ELSE ${this.caseValue(n.else, w)}` : ''} END`
       }
       case 'exists': return `${n.not ? 'NOT ' : ''}EXISTS (${this.select(n.q, w)})`
       case 'over': {

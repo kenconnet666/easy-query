@@ -3,7 +3,7 @@
  */
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { and, createDb, or, touch, win, type Expr, type Interceptor } from '@eqts/core'
+import { and, caseWhen, createDb, or, touch, win, type Expr, type Interceptor } from '@eqts/core'
 import { Comment, Company, Post, schema, seed, User, type TestEnv } from './fixture.ts'
 
 export function liveSuite(name: string, open: () => Promise<TestEnv>): void {
@@ -278,6 +278,90 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>): void {
         { name: 'bob', latest: { title: 'hello' }, top: [{ title: 'hello' }] },
         { name: 'carol', latest: null, top: [] },
       ])
+    })
+  })
+
+  describe(`${name}: functions and CASE`, () => {
+    it('runs string functions', async () => {
+      const { db } = await seeded()
+      // 第 1 篇帖子的标题是 'orm tips'
+      const row = await db.queryable(Post).where((p) => p.id.eq(1)).select((p) => ({
+        head: p.title.substring(0, 3),
+        tail: p.title.substring(4),
+        replaced: p.title.replace('orm', 'ORM'),
+        found: p.title.indexOf('tips'),
+        missing: p.title.indexOf('zzz'),
+        left: p.title.left(3),
+        right: p.title.right(4),
+        rightAll: p.title.right(100),
+      })).single()
+      assert.deepEqual(row, { head: 'orm', tail: 'tips', replaced: 'ORM tips', found: 4, missing: -1, left: 'orm', right: 'tips', rightAll: 'orm tips' })
+    })
+
+    it('runs math functions', async () => {
+      const { db } = await seeded()
+      // 第 3 篇帖子金额 1.25；alice 30 岁
+      const post = await db.queryable(Post).where((p) => p.id.eq(3)).select((p) => ({
+        rounded: p.amount.round(1), floor: p.amount.floor(), ceil: p.amount.ceil(), abs: p.amount.minus(5).abs(),
+      })).single()
+      assert.deepEqual([Number(post.rounded), Number(post.floor), Number(post.ceil), Number(post.abs)], [1.3, 1, 2, 3.75])
+      const user = await db.queryable(User).where((u) => u.name.eq('alice')).select((u) => ({ mod: u.age.mod(7), diff: u.age.minus(40).abs() })).single()
+      assert.deepEqual([Number(user.mod), Number(user.diff)], [2, 10])
+    })
+
+    it('adds days and months and diffs dates', async () => {
+      const { db } = await seeded()
+      // created_at = 2026-01-02 03:04:05
+      const row = await db.queryable(User).where((u) => u.name.eq('alice')).select((u) => ({
+        plus30: u.createdAt.addDays(30).month(),
+        plus30Day: u.createdAt.addDays(30).day(),
+        minus2: u.createdAt.addDays(-2).year(),
+        plus11m: u.createdAt.addMonths(11).month(),
+        plus12m: u.createdAt.addMonths(12).year(),
+        diff: u.createdAt.diffDays(new Date('2025-12-31T00:00:00Z')),
+      })).single()
+      assert.deepEqual(row, { plus30: 2, plus30Day: 1, minus2: 2025, plus11m: 12, plus12m: 2027, diff: 2 })
+    })
+
+    it('casts and nullIfs', async () => {
+      const { db } = await seeded()
+      const row = await db.queryable(User).where((u) => u.name.eq('alice')).select((u) => ({
+        text: u.age.cast('string'),
+        double: u.age.cast('double'),
+        decimal: u.age.cast('decimal', 10, 2),
+        nulled: u.age.nullIf(30),
+        kept: u.age.nullIf(31),
+      })).single()
+      assert.equal(row.text, '30')
+      assert.equal(row.double, 30)
+      assert.equal(Number(row.decimal), 30)
+      assert.equal(row.nulled, null)
+      assert.equal(row.kept, 30)
+    })
+
+    it('builds CASE WHEN with literal and expression branches', async () => {
+      const { db } = await seeded()
+      const rows = await db.queryable(User).orderBy((u) => u.id).select((u) => ({
+        name: u.name,
+        // bob 的年龄为 NULL，比较结果是 NULL，落到 ELSE
+        group: caseWhen(u.age.lt(18), 'minor').when(u.age.lt(65), 'adult').else('unknown'),
+        adult: caseWhen(u.age.ge(18), 1).else(0),
+        label: caseWhen(u.age.isNull(), u.name.upper()).end(),
+      })).toList()
+      assert.deepEqual(rows, [
+        { name: 'alice', group: 'adult', adult: 1, label: null },
+        { name: 'bob', group: 'unknown', adult: 0, label: 'BOB' },
+        { name: 'carol', group: 'minor', adult: 0, label: null },
+      ])
+    })
+
+    it('uses CASE inside conditions and aggregates', async () => {
+      const { db } = await seeded()
+      // CASE 当条件：年龄 >= 18 才是 adult；bob 的年龄为 NULL，落到 ELSE
+      const names = await db.queryable(User).where((u) => caseWhen(u.age.ge(18), 'adult').else('minor').eq('adult')).select((u) => u.name).toList()
+      assert.deepEqual(names, ['alice'])
+      // CASE 当聚合的参数：金额大于 5 的帖子数（10.50 与 2000.00 两篇）
+      assert.equal(Number(await db.queryable(Post).sum((p) => caseWhen(p.amount.gt('5'), 1).else(0))), 2)
     })
   })
 
