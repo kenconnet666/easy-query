@@ -49,6 +49,16 @@ export interface ColumnOptions {
   readonly version?: boolean | undefined
   /** 只在插入时写入，更新永远不碰（创建人、创建时间） */
   readonly insertOnly?: boolean | undefined
+  // ---- 建表（createTables）用的元数据，查询和写入不看它们 ----
+  /** 字符串列的长度，默认 255 */
+  readonly length?: number | undefined
+  readonly precision?: number | undefined
+  readonly scale?: number | undefined
+  /** 直接指定库里的列类型（如 'JSONB'、'TEXT'），优先于按 kind 推断 */
+  readonly dbType?: string | undefined
+  /** 库里的默认值，原样写进 DEFAULT 子句（受信任的 SQL，如 `'draft'`、`CURRENT_TIMESTAMP`） */
+  readonly dbDefault?: string | undefined
+  readonly unique?: boolean | undefined
 }
 
 /** 字符串列的加解密策略：写入前 encrypt、读出后 decrypt。要用 eq 查询必须是确定性的（同一明文得到同一密文） */
@@ -134,6 +144,21 @@ export class Column<T, N extends boolean = false, O extends boolean = false> {
     return new Column(codec, this.options)
   }
 
+  /** 建表时直接用这个类型，如 `col.json<Tags>().dbType('JSONB')`；不影响读写 */
+  dbType(type: string): Column<T, N, O> {
+    return new Column(this.codec, { ...this.options, dbType: type })
+  }
+
+  /** 建表时的 DEFAULT 子句，原样写入（受信任的 SQL）：`.dbDefault("'draft'")`；同时让插入时这一列可省 */
+  dbDefault(sql: string): Column<T, N, true> {
+    return new Column(this.codec, { ...this.options, dbDefault: sql, hasDefault: true })
+  }
+
+  /** 建表时加唯一约束 */
+  unique(): Column<T, N, O> {
+    return new Column(this.codec, { ...this.options, unique: true })
+  }
+
   /** 库里的列名（默认是属性名转下划线） */
   named(name: string): Column<T, N, O> {
     return new Column(this.codec, { ...this.options, name })
@@ -200,13 +225,14 @@ function hexToBytes(text: string): Uint8Array {
   return Uint8Array.from(hex.match(/../g) ?? [], (b) => parseInt(b, 16))
 }
 
-function base<T>(c: Codec<T>): Column<T, false, false> {
-  return new Column(c, { nullable: false, primaryKey: false, generated: false, hasDefault: false })
+function base<T>(c: Codec<T>, extra: Partial<ColumnOptions> = {}): Column<T, false, false> {
+  return new Column(c, { nullable: false, primaryKey: false, generated: false, hasDefault: false, ...extra })
 }
 
 /** 列的类型 */
 export const col = {
-  string: () => base(codec<string>('string', (r) => String(r))),
+  /** 字符串；length 只在建表时用（默认 255） */
+  string: (length?: number) => base(codec<string>('string', (r) => String(r)), { length }),
   int: () => base(codec<number>('int', toNumber)),
   /** 64 位整数；mode 'number'（默认，超出安全整数时报错）、'bigint'、'string' */
   bigint: <M extends 'number' | 'bigint' | 'string' = 'number'>(opts?: { mode?: M }) => {
@@ -216,7 +242,7 @@ export const col = {
     return base(codec<V>('bigint', decode))
   },
   /** 精确小数：JS 里是数值文字（DecimalText），不经过浮点；要对象形式可用 @eqts/decimal 的 decimalJs() */
-  decimal: (_precision?: number, _scale?: number) => base(codec<DecimalText>('decimal', (r) => String(r) as DecimalText)),
+  decimal: (precision?: number, scale?: number) => base(codec<DecimalText>('decimal', (r) => String(r) as DecimalText), { precision, scale }),
   double: () => base(codec<number>('double', (r) => Number(r))),
   /** 绑定时交给方言转换（SQLite / MySQL 写 1 / 0，PG 原样传布尔） */
   boolean: () => base(codec<boolean>('boolean', (r) => r === true || r === 1 || r === '1' || r === 1n || r === 't')),

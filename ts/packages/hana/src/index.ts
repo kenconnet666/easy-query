@@ -7,7 +7,7 @@
  */
 import hdb, { type Client } from 'hdb'
 import { hanaFunctions } from './functions.ts'
-import { Dialect, SqlWriter, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type InsertNode, type Session, type TransactionOptions } from '@eqts/core'
+import { Dialect, SqlWriter, type ColumnOptions, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type InsertNode, type Session, type TransactionOptions } from '@eqts/core'
 
 export { Hana } from './functions.ts'
 
@@ -18,6 +18,22 @@ export class HanaDialect extends Dialect {
   readonly name = 'hana'
   /** HANA 没有 WITH RECURSIVE（层级查询用 HIERARCHY 函数） */
   override readonly supportsRecursiveCte = false
+
+  override columnType(kind: string, o: ColumnOptions): string {
+    if (o.dbType) return o.dbType
+    switch (kind) {
+      case 'string': return `NVARCHAR(${o.length ?? 255})`
+      case 'double': return 'DOUBLE'
+      case 'datetime': return 'TIMESTAMP'
+      case 'json': return 'NCLOB'
+      default: return super.columnType(kind, o)
+    }
+  }
+
+  /** HANA 建列存表用 CREATE COLUMN TABLE，也没有 IF NOT EXISTS（表已存在会报错） */
+  override createTableStart(): string {
+    return 'CREATE COLUMN TABLE'
+  }
 
   /** HANA 跳过被锁行的写法是 IGNORE LOCKED */
   override forUpdate(wait?: 'nowait' | 'skip'): string {

@@ -94,6 +94,19 @@ export const Doc = entity('t_doc', {
   secret: col.string().encrypted(rot13),
 })
 
+/** 建表（代码优先）用的实体：各种类型、自增主键、唯一约束、库里的默认值。不在 schema 里，只在建表测试里用 */
+export const Gadget = entity('t_gadget', {
+  id: col.bigint().primaryKey().generated(),
+  name: col.string(50).unique(),
+  price: col.decimal(10, 2),
+  qty: col.int().dbDefault('0'),
+  active: col.boolean(),
+  born: col.date().nullable(),
+  seenAt: col.datetime(),
+  tags: col.json<string[]>(),
+  photo: col.bytes().nullable(),
+})
+
 export const schema = defineSchema({ Company, User, Post, Comment, Ext, Role, UserRole, Member, Note, Doc }, {
   Company: (r) => ({ users: r.many('User', { from: 'id', to: 'companyId' }) }),
   User: (r) => ({

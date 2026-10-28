@@ -10,7 +10,7 @@
 import pg from 'pg'
 import type { Pool, PoolClient, QueryConfig, QueryResult } from 'pg'
 import { pgFunctions } from './functions.ts'
-import { Dialect, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Node, type Session, type SqlWriter, type TransactionOptions } from '@eqts/core'
+import { Dialect, type ColumnOptions, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Node, type Session, type SqlWriter, type TransactionOptions } from '@eqts/core'
 
 export { Pg } from './functions.ts'
 
@@ -34,6 +34,16 @@ export class PostgresDialect extends Dialect {
       round: (a) => `ROUND(CAST(${a[0]} AS NUMERIC), ${a[1]})`,
       date_trunc: (a) => `DATE_TRUNC(${a[1]}, ${a[0]})`,
       cast_string: (a) => `CAST(${a[0]} AS TEXT)`,
+    }
+  }
+
+  override columnType(kind: string, o: ColumnOptions): string {
+    if (o.dbType) return o.dbType
+    switch (kind) {
+      case 'decimal': return `NUMERIC(${o.precision ?? 38}, ${o.scale ?? 10})`
+      case 'json': return 'JSONB'
+      case 'bytes': return 'BYTEA'
+      default: return super.columnType(kind, o)
     }
   }
 

@@ -8,7 +8,7 @@
  * TIMESTAMP 列会按会话时区换算，建议连接池设 `timezone: 'Z'` 并让会话时区为 +00:00。
  */
 import type { Pool, PoolConnection, ResultSetHeader } from 'mysql2/promise'
-import { Dialect, type Adapter, type ConflictNode, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type SqlWriter, type TransactionOptions } from '@eqts/core'
+import { Dialect, type ColumnOptions, type Adapter, type ConflictNode, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type SqlWriter, type TransactionOptions } from '@eqts/core'
 import { mysqlFunctions } from './functions.ts'
 
 export { MySQL } from './functions.ts'
@@ -29,6 +29,21 @@ export class MySqlDialect extends Dialect {
   override bindParam(value: unknown, w: SqlWriter): string {
     if (typeof value === 'bigint') return value.toString()
     return super.bindParam(value instanceof Uint8Array && !Buffer.isBuffer(value) ? Buffer.from(value) : value, w)
+  }
+
+  override columnType(kind: string, o: ColumnOptions): string {
+    if (o.dbType) return o.dbType
+    switch (kind) {
+      case 'int': return 'INT'
+      case 'double': return 'DOUBLE'
+      case 'datetime': return 'DATETIME(3)'
+      case 'json': return 'JSON'
+      default: return super.columnType(kind, o)
+    }
+  }
+
+  override identity(): string {
+    return 'AUTO_INCREMENT'
   }
 
   /** MySQL 的 `<=>` 就是 null 安全的相等 */

@@ -3,10 +3,10 @@
  */
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { and, caseWhen, createDb, defineView, or, touch, win, type Expr, type ExecutionEvent, type Interceptor } from '@eqts/core'
+import { and, caseWhen, createDb, defineSchema, defineView, or, touch, win, type Expr, type ExecutionEvent, type Interceptor } from '@eqts/core'
 import { CalendarDateTime, fromDate, parseDate, Time } from '@internationalized/date'
 import { Decimal } from 'decimal.js'
-import { Comment, Company, Doc, Ext, Member, Note, Post, Role, schema, seed, User, UserRole, type TestEnv } from './fixture.ts'
+import { Comment, Company, Doc, Ext, Gadget, Member, Note, Post, Role, schema, seed, User, UserRole, type TestEnv } from './fixture.ts'
 
 export interface LiveSuiteOptions {
   /** 库里建了 t_ext 表，可以跑 decimal.js / bigint / @internationalized/date 的往返用例 */
@@ -27,6 +27,8 @@ export interface LiveSuiteOptions {
   readonly createTableAs?: boolean
   /** 是否支持 RETURNING（PG、SQLite 支持；MySQL、HANA 不支持，改测"报不支持"） */
   readonly returning?: boolean
+  /** 是否测试代码优先建表（createTables）的往返 */
+  readonly ddl?: boolean
 }
 
 export function liveSuite(name: string, open: () => Promise<TestEnv>, options: LiveSuiteOptions = {}): void {
@@ -517,6 +519,30 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>, options: L
       const owners = await db.queryable(Note).orderBy((n) => n.body).select((n) => ({ body: n.body, owner: n.member.name })).toList()
       assert.deepEqual(owners.map((o) => [o.body, o.owner]), [['a', 'm1'], ['b', 'm1'], ['c', 'm3'], ['d', 'm2']])
       assert.equal(await db.queryable(Member).where((m) => m.notes.any((n) => n.body.eq('c'))).count(), 1)
+    })
+  })
+
+  describe(`${name}: code-first DDL`, { skip: options.ddl === false }, () => {
+    it('creates a table from the entity definition and round-trips every column type', async () => {
+      const env = await seeded()
+      const db = createDb({ schema: defineSchema({ Gadget }), adapter: env.adapter })
+      // HANA 没有 DROP TABLE IF EXISTS：先试着删，不存在就算了
+      await db.sql.execute`DROP TABLE ${db.sql.ident('t_gadget')}`.catch(() => undefined)
+      await db.createTables()
+      try {
+        const seenAt = new Date('2026-03-04T05:06:07.008Z')
+        await db.insert(Gadget).values({ name: 'widget', price: '12.50', active: true, seenAt, tags: ['a', 'b'] }).execute()
+        const row = await db.queryable(Gadget).single()
+        // qty 没给，库里的 DEFAULT 0 生效；可空列没给就是 null
+        assert.deepEqual([row.name, Number(row.price), row.qty, row.active, row.born, row.photo], ['widget', 12.5, 0, true, null, null])
+        assert.equal(row.seenAt.toISOString(), seenAt.toISOString())
+        assert.deepEqual(row.tags, ['a', 'b'])
+        assert.equal(typeof row.id, 'number')
+        // 唯一约束
+        await assert.rejects(() => db.insert(Gadget).values({ name: 'widget', price: '1.00', active: false, seenAt, tags: [] }).execute())
+      } finally {
+        await db.sql.execute`DROP TABLE ${db.sql.ident('t_gadget')}`
+      }
     })
   })
 

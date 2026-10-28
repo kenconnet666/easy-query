@@ -7,7 +7,7 @@
  * 注意：同一个 DatabaseSync 只有一条连接，事务进行中其它异步代码发出的语句也会落在这个事务里；事务之间按顺序排队。
  */
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
-import { Dialect, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type TransactionOptions } from '@eqts/core'
+import { Dialect, type ColumnOptions, type Entity, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type TransactionOptions } from '@eqts/core'
 
 /** SQLite 的日期时间是文字：用 strftime 取整，结果仍是 'YYYY-MM-DD HH:MM:SS' */
 function dateTrunc(x: string, unit: string): string {
@@ -31,6 +31,29 @@ export class SqliteDialect extends Dialect {
   override readonly nullSafeEquals = 'IS'
   /** SQLite 3.35+（node:sqlite 自带的版本满足） */
   override readonly supportsReturning = true
+
+  /** SQLite 只有 INTEGER / REAL / TEXT / BLOB / NUMERIC 几种亲和性：日期时间都是 TEXT，布尔是 INTEGER */
+  override columnType(kind: string, o: ColumnOptions): string {
+    if (o.dbType) return o.dbType
+    switch (kind) {
+      case 'int': case 'bigint': case 'boolean': return 'INTEGER'
+      case 'decimal': return 'NUMERIC'
+      case 'double': return 'REAL'
+      case 'bytes': return 'BLOB'
+      default: return 'TEXT'
+    }
+  }
+
+  /** 自增主键必须写成 `INTEGER PRIMARY KEY AUTOINCREMENT`（主键约束就在列上） */
+  override columnDefinition(name: string, kind: string, o: ColumnOptions): string {
+    if (o.generated) return `${this.quote(name)} INTEGER PRIMARY KEY AUTOINCREMENT`
+    return super.columnDefinition(name, kind, o)
+  }
+
+  protected override tableConstraints(entity: Entity): string[] {
+    const hasGenerated = Object.values(entity.columns).some((c) => c.options.generated)
+    return super.tableConstraints(entity).filter((c) => !(hasGenerated && c.startsWith('PRIMARY KEY')))
+  }
 
   /** SQLite 没有 ROLLUP / CUBE */
   override groupByKeys(keys: string[], mode: 'rollup' | 'cube' | undefined): string {

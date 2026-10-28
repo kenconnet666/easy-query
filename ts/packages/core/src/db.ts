@@ -111,6 +111,23 @@ export class Db<S extends AnySchema> {
     return extended ?? this.extend(entity)
   }
 
+  /** 按实体定义生成建表语句（列、主键、唯一约束），不执行。类型规则见各方言的 columnType */
+  createTableSql(entity: Entity): string {
+    return this.ctx.dialect.createTable(entity, true)
+  }
+
+  /**
+   * 按 schema 里所有（非派生的）实体建表，已存在的跳过（HANA 没有 IF NOT EXISTS，表已存在会报错）。
+   * 适合测试、原型、小工具；正式环境的结构变更仍然应该用你自己的迁移。
+   * 只建表、列、主键、唯一约束；外键、非唯一索引、注释这类要自己用 `db.sql` 或迁移。
+   */
+  async createTables(): Promise<void> {
+    for (const entity of Object.values(this.ctx.schema.entities)) {
+      if (entity.derived) continue
+      await execute(this.ctx, { sql: this.ctx.dialect.createTable(entity, true), params: [] })
+    }
+  }
+
   /**
    * 换表：这个 Db 上的查询把实体映射到别的表（热表 / 归档表、按月分表），导航、join、子查询、include 都跟着换，
    * 不用改任何查询代码。映射的表要有同样的列；`mapTables({ Post: 't_post_2025' })`。
