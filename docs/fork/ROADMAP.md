@@ -72,6 +72,35 @@ M3b：
 - [ ] T4 `pull`：从现有库生成 schema 文件（进 BACKLOG，T3 后视情况）
 - [x] CI 加 ts job：typecheck（含类型样板）、SQLite 单测、MySQL 8.0.18 服务容器跑共用套件
 
+## M7 TS 版补全（依据 2026-10-28 对照 Java 版的缺口分析；每项一个独立工作项，代码与测试一律带中文注释）
+
+约定：测试集中在独立模块 `ts/packages/test`（`@eqts/test`）——共享夹具、共用套件、类型检查、SQLite 零基础设施的特性测试都放这里；mysql / pg / hana 包只留依赖各自驱动的实库测试，并从 `@eqts/test` 取夹具与共用套件。
+
+P0（日常会撞上，或有正确性风险）：
+- [~] 7.0 独立测试模块 `@eqts/test`（夹具 / 共用套件 / 类型检查 / SQLite 测试迁入）
+- [~] 7.1 根查询聚合：`db.queryable(X).sum / avg / max / min(...)`（不必借 groupBy）
+- [~] 7.2 decimal（字符串）列可做算术：`plus / minus / times / div` 接受 number、bigint、十进制文字
+- [~] 7.3 多行插入按方言绑定参数上限自动分块；`in(...)` 大列表同样分块
+- [~] 7.4 `caseWhen` 与函数库：字符串（substring / replace / indexOf / left / right / padLeft …）、数学（abs / round / floor / ceil / mod …）、日期（addDays / diff …）、`nullIf`、`cast`
+- [~] 7.5 原生 SQL 入口 `db.sql\`...\``（返回行 / 受影响行数）
+- [~] 7.6 执行钩子（before / after / error，带耗时与行数），`log` 保留为简写
+- [ ] 7.7 显式 join：`innerJoin / leftJoin / rightJoin(Entity, on)`、导航的 inner 语义、一对多展平
+- [ ] 7.8 多对多导航（`r.manyToMany`，经中间表）与复合外键（`from / to` 支持列元组）
+- [ ] 7.9 `union / unionAll`、CTE（含递归）、派生表 `from(query)`、`in(子查询)`
+- [ ] 7.10 列修饰器：`$default / $onUpdate / softDelete / version / $type<Brand>() / enum / encrypted / ignore`；逻辑删除把 delete 改写为 update 并给读加过滤
+- [ ] 7.11 构建与发布：tsc 产出 `dist/*.js` + `.d.ts`，`exports` 指向 dist（Node 不对 `node_modules` 里的 `.ts` 做类型剥离，现在不能当 npm 包用）
+
+P1（能力对齐）：
+- [ ] 7.12 `defineView`：可复用、可嵌套的投影（对应 Java 的 DTO / VO）
+- [ ] 7.13 `Expr` 类型门面：用条件类型交叉让补全只列出适用的方法；date 列改模板字面量类型
+- [ ] 7.14 流式读取（`for await`）、`AbortSignal`、`await using` 事务、savepoint 嵌套事务、只读事务
+- [ ] 7.15 方言能力对齐 Java M3b：`rollup / cube / grouping`、`eqNullSafe`、`dateTrunc`、`forUpdateNoWait / SkipLocked`、`INSERT … SELECT`、表名映射、通用 `returning`
+- [ ] 7.16 代码优先 DDL：schema → `CREATE TABLE`（与 T4 `pull` 互补）；`decimal(p, s)` 的精度要先留在列元数据里
+- [ ] 7.17 JSON 列接 Standard Schema（zod / valibot / arktype）做读写校验
+- [ ] 7.18 写入补全：`returnEntity`、按实体批量更新 / 删除、`save`（带导航的对象图保存）、拦截器 after 钩子
+
+P2：对象过滤式 where、字段加密之外的行为级 SQL 参数格式化；读写分离（做成 Adapter 路由）。分库分表、实体追踪不做。
+
 ## M6 成熟收尾
 
 - [x] 合并上游、全量构建、上游基线对比（2026-10-28：上游无新提交，全量构建通过；基线沿用 M3b 那次）
