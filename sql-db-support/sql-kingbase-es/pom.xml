@@ -4,9 +4,9 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>com.easy-query</groupId>
+        <groupId>org.dpdns.zerodep.easyquery</groupId>
         <artifactId>easy-query-all</artifactId>
-        <version>3.3.1</version>
+        <version>3.3.1-zd.1</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
     <name>sql-kingbase-es</name>
@@ -20,7 +20,7 @@
     </properties>
     <dependencies>
         <dependency>
-            <groupId>com.easy-query</groupId>
+            <groupId>org.dpdns.zerodep.easyquery</groupId>
             <artifactId>sql-core</artifactId>
             <version>${project.version}</version>
             <scope>compile</scope>

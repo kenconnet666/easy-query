@@ -4,9 +4,9 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>com.easy-query</groupId>
+        <groupId>org.dpdns.zerodep.easyquery</groupId>
         <artifactId>easy-query-all</artifactId>
-        <version>3.3.1</version>
+        <version>3.3.1-zd.1</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
@@ -21,14 +21,14 @@
     </properties>
     <dependencies>
         <dependency>
-            <groupId>com.easy-query</groupId>
+            <groupId>org.dpdns.zerodep.easyquery</groupId>
             <artifactId>sql-core</artifactId>
             <version>${project.version}</version>
             <scope>compile</scope>
         </dependency>
         <!-- fork：Hana 方言入口（Hana.text(..) 等）用代理 API；与 sql-mysql / sql-pgsql 相同，由使用方提供 -->
         <dependency>
-            <groupId>com.easy-query</groupId>
+            <groupId>org.dpdns.zerodep.easyquery</groupId>
             <artifactId>sql-api-proxy</artifactId>
             <version>${project.version}</version>
             <scope>provided</scope>

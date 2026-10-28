@@ -4,13 +4,13 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.easy-query</groupId>
+    <groupId>org.dpdns.zerodep.easyquery</groupId>
     <artifactId>easy-query-all</artifactId>
     <packaging>pom</packaging>
-    <version>3.3.1</version>
-    <name>easy-query</name>
-    <description>java object query distributed connector</description>
-    <url>https://github.com/xuejmnet/easy-query</url>
+    <version>3.3.1-zd.1</version>
+    <name>easy-query (zerodep fork)</name>
+    <description>Fork of dromara/easy-query: java object query distributed connector, with more dialects (SAP HANA) and extension points</description>
+    <url>https://github.com/kenconnet666/easy-query</url>
     <!--开源协议-->
     <licenses>
         <license>
@@ -153,9 +153,13 @@
                 <extensions>true</extensions>
                 <configuration>
                     <!--  对应maven的setting.xml<servers> <server> <id>ossrh</id> -->
-                    <publishingServerId>ossrh</publishingServerId>
+                    <publishingServerId>central</publishingServerId>
                     <!-- 是否自动发布，false需要在手动发布：https://central.sonatype.com/publishing -->
-                    <autoPublish>true</autoPublish>
+                    <autoPublish>false</autoPublish>
+                    <excludeArtifacts>
+                        <artifact>sql-test</artifact>
+                        <artifact>sql-fork-test</artifact>
+                    </excludeArtifacts>
                 </configuration>
             </plugin>
         </plugins>
@@ -163,9 +167,9 @@
 
 
     <scm>
-        <connection>https://github.com/xuejmnet/easy-query.git</connection>
-        <developerConnection>https://github.com/xuejmnet</developerConnection>
-        <url>https://github.com/xuejmnet/easy-query</url>
+        <connection>scm:git:https://github.com/kenconnet666/easy-query.git</connection>
+        <developerConnection>scm:git:https://github.com/kenconnet666/easy-query.git</developerConnection>
+        <url>https://github.com/kenconnet666/easy-query</url>
     </scm>
     <!--填入开发者信息，姓名、邮箱、项目地址-->
     <developers>
@@ -173,6 +177,11 @@
             <name>xuejiaming</name>
             <email>326308290@qq.com</email>
             <url>https://github.com/xuejmnet</url>
+        </developer>
+        <developer>
+            <name>lionheart</name>
+            <email>kenconnet@foxmail.com</email>
+            <url>https://github.com/kenconnet666/easy-query</url>
         </developer>
     </developers>
 </project>

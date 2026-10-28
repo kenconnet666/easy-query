@@ -4,9 +4,9 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>com.easy-query</groupId>
+        <groupId>org.dpdns.zerodep.easyquery</groupId>
         <artifactId>easy-query-all</artifactId>
-        <version>3.3.1</version>
+        <version>3.3.1-zd.1</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
@@ -20,14 +20,14 @@
     </properties>
     <dependencies>
         <dependency>
-            <groupId>com.easy-query</groupId>
+            <groupId>org.dpdns.zerodep.easyquery</groupId>
             <artifactId>sql-core</artifactId>
             <version>${project.version}</version>
             <scope>compile</scope>
         </dependency>
         <!-- fork：方言专属函数入口（按列包装）要用代理 API 的表达式类型；provided：用代理 API 的项目本来就有它，只用 client API 的不受影响 -->
         <dependency>
-            <groupId>com.easy-query</groupId>
+            <groupId>org.dpdns.zerodep.easyquery</groupId>
             <artifactId>sql-api-proxy</artifactId>
             <version>${project.version}</version>
             <scope>provided</scope>
