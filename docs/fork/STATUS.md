@@ -4,12 +4,9 @@
 
 ## 当前
 
-<<<<<<< HEAD
-- **已发布（2026-10-28）**：npm 的 7 个包 `@zerodep-dev/easy-query-ts`、`-sqlite`、`-mysql`、`-pg`、`-hana`、`-decimal`、`-date` 的 0.1.0（`latest` 与 `next`），已从真实仓库在干净项目里装过、跑过、类型检查过；Maven `org.dpdns.zerodep.easyquery:*:3.3.1-zd.1` 早已在 Central 上（含 springboot4 starter），Java 没有新改动，不需要重发。M7（TS 版补全）全部完成并合并（#29、#30、#31），418 个用例在 SQLite、MySQL 8.0.18 / 8.4、PG 17 上通过。HANA 不在本机验证，靠 CI/CD：新增写法在 CI 跑过之前**未实库验证**（现有 ci.yml 的 ts job 没有 HANA 步骤）。
-=======
 - **2026-10-28：TS 版迁到 [vue-tsx-pro](https://github.com/kenconnet666/vue-tsx-pro) 仓库的 `packages/easy-query/`（带历史）**，本仓库删掉 `ts/` 与 CI 的 ts 任务，只留 Java。下面 M5、M7 的记录留作历史。
-- M7（TS 版补全，见 ROADMAP）**全部完成**，在 SQLite、MySQL 8.0.18 / 8.4、PG 17 上实测（418 个用例，类型检查与 `pnpm run build` 通过）。PR #29（7.0–7.6、7.19）与 #30（7.7 显式 join）已开；7.8–7.18、7.13 在本地叠加分支 `feat/ts-m7-relations` → … → `feat/ts-m7-expr-facade`（线性叠加，尚未推送）。HANA 不在本机验证，靠 CI/CD：新增写法在 CI 跑过之前**未实库验证**（现有 ci.yml 的 ts job 没有 HANA 步骤）。7.13 的"补全门面"评估后不做（见 BACKLOG）。
->>>>>>> f449011054ac94b44b7617bc6f70c61a673e72b8
+- M7（TS 版补全，见 ROADMAP）**全部完成**，在 SQLite、MySQL 8.0.18 / 8.4、PG 17 上实测（418 个用例，类型检查与 `pnpm run build` 通过）。已合并（#29、#30、#31）。HANA 不在本机验证，靠 CI/CD：新增写法在 CI 跑过之前**未实库验证**（现有 ci.yml 的 ts job 没有 HANA 步骤）。7.13 的"补全门面"评估后不做（见 BACKLOG）。
+- **已发布（2026-10-28）**：npm 的 7 个包 `@zerodep-dev/easy-query-ts`、`-sqlite`、`-mysql`、`-pg`、`-hana`、`-decimal`、`-date` 的 0.1.0（`latest` 与 `next`）；Maven `org.dpdns.zerodep.easyquery:*:3.3.1-zd.1` 早已在 Central 上，Java 没有新改动，不需要重发。
 - M6 收尾完成：文档索引 `README.md`、交接 `HANDOFF.md`（换机器先读）、回馈上游清单 `upstream-candidates.md`。
 - flow 验收分支 `eq-fork-acceptance`（本地，不推送）：每个工作项前 fetch 并 merge flow 的 origin/master。
 
