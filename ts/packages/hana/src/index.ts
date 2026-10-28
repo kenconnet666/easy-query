@@ -19,6 +19,11 @@ export class HanaDialect extends Dialect {
   /** HANA 没有 WITH RECURSIVE（层级查询用 HIERARCHY 函数） */
   override readonly supportsRecursiveCte = false
 
+  /** HANA 没有 RELEASE SAVEPOINT：回滚到保存点即可，其余在事务结束时一起清掉 */
+  override releaseSavepoint(): string | undefined {
+    return undefined
+  }
+
   protected override functions(): Record<string, FunctionRenderer> {
     return {
       ...super.functions(),
@@ -198,6 +203,7 @@ class HanaDriver extends HanaSession implements Driver {
     client.setAutoCommit(false)
     try {
       if (options?.isolation) await run(client, `SET TRANSACTION ISOLATION LEVEL ${ISOLATION[options.isolation]}`, [])
+      if (options?.readOnly) await run(client, 'SET TRANSACTION READ ONLY', [])
       try {
         const result = await work(new HanaSession(async () => ({ client, release: () => undefined })))
         await call<void>((cb) => client.commit((error) => cb(error, undefined)))

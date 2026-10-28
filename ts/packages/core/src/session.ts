@@ -15,12 +15,19 @@ export interface ExecuteResult {
 export interface Session {
   query(sql: string, params: readonly unknown[]): Promise<Record<string, unknown>[]>
   execute(sql: string, params: readonly unknown[]): Promise<ExecuteResult>
+  /**
+   * 流式读取：每次产出一批（最多 batchSize 行），不把整个结果集读进内存。驱动不支持时不实现，
+   * 核心退化成一次读完再分批产出（API 一致，只是没有省内存）。
+   */
+  stream?(sql: string, params: readonly unknown[], batchSize: number): AsyncIterable<Record<string, unknown>[]>
 }
 
 export type IsolationLevel = 'read uncommitted' | 'read committed' | 'repeatable read' | 'serializable'
 
 export interface TransactionOptions {
   readonly isolation?: IsolationLevel
+  /** 只读事务：数据库会拒绝其中的写入，部分库还能据此做优化 */
+  readonly readOnly?: boolean
 }
 
 export interface Driver extends Session {
@@ -57,6 +64,8 @@ export interface Context {
   /** 每条语句执行后调用（成功与失败都会），用来记耗时、慢 SQL、链路追踪 */
   readonly onExecute: ((event: ExecutionEvent) => void) | undefined
   readonly interceptors: Interceptors
+  /** 取消信号：已取消的信号让新语句直接失败，执行中取消则不再等待结果（见 Db.withSignal） */
+  readonly signal: AbortSignal | undefined
 }
 
 export function query(ctx: Context, statement: Statement): Promise<Record<string, unknown>[]> {
@@ -75,11 +84,61 @@ async function observe<T>(ctx: Context, statement: Statement, kind: 'query' | 'e
   const started = performance.now()
   let result: T
   try {
-    result = await run()
+    result = await abortable(ctx.signal, run)
   } catch (error) {
     ctx.onExecute?.({ statement, kind, durationMs: performance.now() - started, rows: 0, error })
     throw error
   }
   ctx.onExecute?.({ statement, kind, durationMs: performance.now() - started, rows: count(result), error: undefined })
   return result
+}
+
+/**
+ * 带取消地执行：信号已取消就不再发出语句；执行中取消就不再等待，立刻以信号的 reason 失败。
+ * 注意这只是"客户端不再等"，数据库那边的语句不会被终止（真正的终止要各驱动的取消协议，如 MySQL KILL QUERY、PG pg_cancel_backend）。
+ */
+export async function abortable<T>(signal: AbortSignal | undefined, run: () => Promise<T>): Promise<T> {
+  if (!signal) return run()
+  signal.throwIfAborted()
+  let onAbort!: () => void
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(signal.reason)
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+  try {
+    return await Promise.race([run(), aborted])
+  } finally {
+    signal.removeEventListener('abort', onAbort)
+  }
+}
+
+/**
+ * 流式执行一条查询，按批产出行。驱动没有 stream 时一次读完再分批。
+ * 语句日志、onExecute 的行为与 query 一致：日志在开始前，onExecute 在流结束（或被中途放弃）时，rows 是实际产出的行数。
+ */
+export async function* streamRows(ctx: Context, statement: Statement, batchSize: number): AsyncGenerator<Record<string, unknown>[]> {
+  ctx.log?.(statement)
+  const started = performance.now()
+  let rows = 0
+  let failure: unknown
+  try {
+    ctx.signal?.throwIfAborted()
+    const source = ctx.session.stream
+      ? ctx.session.stream(statement.sql, statement.params, batchSize)
+      : chunks(await abortable(ctx.signal, () => ctx.session.query(statement.sql, statement.params)), batchSize)
+    for await (const batch of source) {
+      ctx.signal?.throwIfAborted()
+      rows += batch.length
+      yield batch
+    }
+  } catch (error) {
+    failure = error
+    throw error
+  } finally {
+    ctx.onExecute?.({ statement, kind: 'query', durationMs: performance.now() - started, rows, error: failure })
+  }
+}
+
+function* chunks<T>(items: readonly T[], size: number): Generator<T[]> {
+  for (let i = 0; i < items.length; i += size) yield items.slice(i, i + size)
 }

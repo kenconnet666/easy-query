@@ -10,7 +10,7 @@ import type { AnySchema, EntityKey, Schema } from './relations.ts'
 import type { KeyOf } from './db.ts'
 import { Column, type Codec, type DerivedEntity, type Entity, type Row } from './schema.ts'
 import { refEntity } from './interceptor.ts'
-import { query, type Context } from './session.ts'
+import { query, streamRows, type Context } from './session.ts'
 
 /** 构建时求值的 lambda：单表查询收到一个表引用，join 之后按 join 顺序收到多个 */
 type Fn<R> = (...refs: any[]) => R
@@ -133,6 +133,19 @@ abstract class Executable<Out> implements Subquery<Out> {
   limit(n: number): this { return this.with({ limit: n }) }
   offset(n: number): this { return this.with({ offset: n }) }
   distinct(): this { return this.with({ distinct: true }) }
+
+  /**
+   * 流式读取：`for await (const row of query.stream())`，不把整个结果集读进内存。
+   * MySQL（mysql2 流）、PG（游标）、SQLite（iterate）是真正的流式；驱动不支持的库退化成一次读完再产出。
+   * 不能和 toList() 导航（对象树）一起用——对象树需要先拿到所有父行。想要边读边处理时，注意中途 break 会释放连接。
+   */
+  async *stream(options: { batchSize?: number } = {}): AsyncGenerator<Out> {
+    const built = build(this.ctx, this.state)
+    if (built.shape.lists.length > 0) throw new Error('stream() cannot be combined with toList() navigations; use toList() to build object trees')
+    for await (const batch of streamRows(this.ctx, render(this.ctx, built.select), options.batchSize ?? 500)) {
+      for (const row of batch) yield built.shape.read(row) as Out
+    }
+  }
 
   async toList(): Promise<Out[]> {
     const built = build(this.ctx, this.state)

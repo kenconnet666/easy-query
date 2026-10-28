@@ -15,6 +15,8 @@ export interface LiveSuiteOptions {
   readonly extraTables?: boolean
   /** 是否测试递归 CTE；HANA 没有 WITH RECURSIVE，传 false */
   readonly recursiveCte?: boolean
+  /** 是否测试只读事务；各库的拒绝写入报错不同，只断言"会失败"。HANA 未验证时可关 */
+  readonly readOnlyTransactions?: boolean
 }
 
 export function liveSuite(name: string, open: () => Promise<TestEnv>, options: LiveSuiteOptions = {}): void {
@@ -505,6 +507,101 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>, options: L
       const owners = await db.queryable(Note).orderBy((n) => n.body).select((n) => ({ body: n.body, owner: n.member.name })).toList()
       assert.deepEqual(owners.map((o) => [o.body, o.owner]), [['a', 'm1'], ['b', 'm1'], ['c', 'm3'], ['d', 'm2']])
       assert.equal(await db.queryable(Member).where((m) => m.notes.any((n) => n.body.eq('c'))).count(), 1)
+    })
+  })
+
+  describe(`${name}: streaming, cancellation and transactions`, () => {
+    it('streams rows in batches without loading everything first', async () => {
+      const { db } = await seeded()
+      await db.insert(Post).values(Array.from({ length: 1200 }, (_, i) => ({ userId: 1, title: `bulk ${i}`, amount: '1.00' as const }))).execute()
+      let count = 0
+      let batches = 0
+      for await (const row of db.queryable(Post).orderBy((p) => p.id).stream({ batchSize: 500 })) {
+        count += 1
+        if (row.id % 500 === 0) batches += 1
+      }
+      assert.equal(count, 1204)
+      assert.ok(batches >= 2)
+      // 读到第一行就放弃：连接要还回去，之后的查询照常
+      for await (const row of db.queryable(Post).orderBy((p) => p.id).stream()) {
+        assert.equal(row.title, 'orm tips')
+        break
+      }
+      assert.equal(await db.queryable(Post).count(), 1204)
+      await assert.rejects(async () => { for await (const _ of db.queryable(User).select((u) => ({ posts: u.posts.toList() })).stream()) void _ }, /toList()/)
+    })
+
+    it('streams inside a transaction and reports the streamed rows to onExecute', async () => {
+      const env = await seeded()
+      const events: ExecutionEvent[] = []
+      const db = createDb({ schema, adapter: env.adapter, onExecute: (e) => events.push(e) })
+      await db.transaction(async (tx) => {
+        await tx.insert(Comment).values({ postId: 1, body: 'inside' }).execute()
+        const bodies: string[] = []
+        for await (const c of tx.queryable(Comment).orderBy((c) => c.id).stream({ batchSize: 2 })) bodies.push(c.body)
+        assert.deepEqual(bodies, ['nice', 'thanks', 'inside'])
+      })
+      assert.ok(events.some((e) => e.kind === 'query' && e.rows === 3 && e.error === undefined))
+    })
+
+    it('rolls back only the savepoint when a nested transaction fails', async () => {
+      const { db } = await seeded()
+      const titles = async () => (await db.queryable(Post).where((p) => p.title.startsWith('tx-')).orderBy((p) => p.title).toList()).map((p) => p.title)
+      const add = (tx: typeof db, title: string) => tx.insert(Post).values({ userId: 1, title, amount: '1.00' }).execute()
+      await db.transaction(async (tx) => {
+        await add(tx, 'tx-a')
+        await assert.rejects(() => tx.transaction(async (inner) => { await add(inner, 'tx-b'); throw new Error('boom') }), /boom/)
+        await tx.transaction(async (inner) => { await add(inner, 'tx-c') })
+      })
+      assert.deepEqual(await titles(), ['tx-a', 'tx-c'])
+      // 外层回滚时，成功的嵌套事务也一起回滚
+      await assert.rejects(() => db.transaction(async (tx) => {
+        await tx.transaction(async (inner) => { await add(inner, 'tx-d') })
+        throw new Error('outer')
+      }), /outer/)
+      assert.deepEqual(await titles(), ['tx-a', 'tx-c'])
+      await assert.rejects(() => db.transaction(async (tx) => { await tx.transaction(async () => undefined, { isolation: 'serializable' }) }), /nested transaction/)
+    })
+
+    it('begins a transaction manually and rolls back unless committed', async () => {
+      const { db } = await seeded()
+      const count = () => db.queryable(Post).where((p) => p.title.startsWith('manual-')).count()
+      const add = (tx: typeof db, title: string) => tx.insert(Post).values({ userId: 1, title, amount: '1.00' }).execute()
+      {
+        await using tx = await db.begin()
+        await add(tx, 'manual-1')
+        await tx.commit()
+      }
+      assert.equal(await count(), 1)
+      {
+        // 没提交就离开作用域：自动回滚
+        await using tx = await db.begin()
+        await add(tx, 'manual-2')
+      }
+      assert.equal(await count(), 1)
+      const tx = await db.begin()
+      await add(tx, 'manual-3')
+      await tx.rollback()
+      await tx.rollback() // 已结束再回滚什么也不做
+      await assert.rejects(() => tx.commit(), /already finished/)
+      assert.equal(await count(), 1)
+    })
+
+    it('rejects writes in a read-only transaction', { skip: options.readOnlyTransactions === false }, async () => {
+      const { db } = await seeded()
+      assert.equal(await db.transaction((tx) => tx.queryable(Post).count(), { readOnly: true }), 4)
+      await assert.rejects(() => db.transaction((tx) => tx.insert(Post).values({ userId: 1, title: 'ro', amount: '1.00' }).execute(), { readOnly: true }))
+      // 事务结束后连接恢复可写（SQLite 的 query_only 要被还原）
+      await db.insert(Post).values({ userId: 1, title: 'rw', amount: '1.00' }).execute()
+      assert.equal(await db.queryable(Post).count(), 5)
+    })
+
+    it('stops waiting when the signal is aborted', async () => {
+      const { db } = await seeded()
+      await assert.rejects(() => db.withSignal(AbortSignal.abort(new Error('cancelled'))).queryable(User).toList(), /cancelled/)
+      // 没取消的信号不影响结果
+      assert.equal((await db.withSignal(new AbortController().signal).queryable(User).toList()).length, 3)
+      await assert.rejects(async () => { for await (const _ of db.withSignal(AbortSignal.abort()).queryable(User).stream()) void _ })
     })
   })
 

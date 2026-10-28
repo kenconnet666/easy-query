@@ -7,7 +7,7 @@
  * 注意：同一个 DatabaseSync 只有一条连接，事务进行中其它异步代码发出的语句也会落在这个事务里；事务之间按顺序排队。
  */
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
-import { Dialect, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Session } from '@eqts/core'
+import { Dialect, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type TransactionOptions } from '@eqts/core'
 
 export class SqliteDialect extends Dialect {
   readonly name = 'sqlite'
@@ -71,6 +71,21 @@ class SqliteSession implements Session {
     return statement.all(...(params as SQLInputValue[])) as Record<string, unknown>[]
   }
 
+  /** node:sqlite 的 iterate：逐行从游标取，按批产出 */
+  async *stream(sql: string, params: readonly unknown[], batchSize: number): AsyncGenerator<Record<string, unknown>[]> {
+    const statement = this.database.prepare(sql)
+    if (this.bigInts) statement.setReadBigInts(true)
+    let batch: Record<string, unknown>[] = []
+    for (const row of statement.iterate(...(params as SQLInputValue[]))) {
+      batch.push(row as Record<string, unknown>)
+      if (batch.length >= batchSize) {
+        yield batch
+        batch = []
+      }
+    }
+    if (batch.length > 0) yield batch
+  }
+
   async execute(sql: string, params: readonly unknown[]): Promise<ExecuteResult> {
     const result = this.database.prepare(sql).run(...(params as SQLInputValue[]))
     return { affected: Number(result.changes), insertId: result.lastInsertRowid }
@@ -80,9 +95,11 @@ class SqliteSession implements Session {
 class SqliteDriver extends SqliteSession implements Driver {
   private queue: Promise<unknown> = Promise.resolve()
 
-  async transaction<T>(work: (session: Session) => Promise<T>): Promise<T> {
+  async transaction<T>(work: (session: Session) => Promise<T>, options?: TransactionOptions): Promise<T> {
     const run = async (): Promise<T> => {
-      this.database.exec('BEGIN IMMEDIATE')
+      // 只读事务：SQLite 没有 READ ONLY 事务，用 query_only 让写入被拒绝；不需要写锁，所以用普通的 BEGIN
+      this.database.exec(options?.readOnly ? 'PRAGMA query_only = ON' : 'BEGIN IMMEDIATE')
+      if (options?.readOnly) this.database.exec('BEGIN')
       try {
         const result = await work(this)
         this.database.exec('COMMIT')
@@ -90,6 +107,8 @@ class SqliteDriver extends SqliteSession implements Driver {
       } catch (error) {
         this.database.exec('ROLLBACK')
         throw error
+      } finally {
+        if (options?.readOnly) this.database.exec('PRAGMA query_only = OFF')
       }
     }
     const next = this.queue.then(run, run)

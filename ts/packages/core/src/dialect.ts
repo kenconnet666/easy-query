@@ -124,6 +124,20 @@ export abstract class Dialect {
     return ' FOR UPDATE'
   }
 
+  /** 嵌套事务用的保存点语句；保存点名字由核心生成（只含字母数字下划线） */
+  savepoint(name: string): string {
+    return `SAVEPOINT ${name}`
+  }
+
+  /** 释放保存点；没有这条语句的库返回 undefined（回滚到保存点后事务照常继续） */
+  releaseSavepoint(name: string): string | undefined {
+    return `RELEASE SAVEPOINT ${name}`
+  }
+
+  rollbackToSavepoint(name: string): string {
+    return `ROLLBACK TO SAVEPOINT ${name}`
+  }
+
   /** 是否支持递归 CTE（WITH RECURSIVE）。HANA 没有，用层级函数代替 */
   readonly supportsRecursiveCte: boolean = true
 

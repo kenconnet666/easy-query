@@ -13,7 +13,7 @@ import { cteEntity, newQueryable, recursiveCteEntity, type Query, type Queryable
 import type { AnySchema, EntityKey, Schema } from './relations.ts'
 import type { DerivedEntity, Entity } from './schema.ts'
 import { createSqlTag, type SqlTag } from './native.ts'
-import type { Adapter, Context, ExecutionEvent, Session, TransactionOptions } from './session.ts'
+import { execute, type Adapter, type Context, type ExecutionEvent, type Session, type TransactionOptions } from './session.ts'
 
 /** 实体对象在 schema 里的键 */
 export type KeyOf<S extends AnySchema, E> = { [K in EntityKey<S>]: S['entities'][K] extends E ? K : never }[EntityKey<S>]
@@ -39,6 +39,8 @@ export class Db<S extends AnySchema> {
   private readonly adapter: Adapter
   private readonly keys: Map<Entity, string>
   private readonly inTransaction: boolean
+  /** 嵌套事务的保存点序号（同一个事务里的 Db 共用） */
+  private readonly savepoints: { n: number } = { n: 0 }
   /** 原生 SQL：`db.sql\`SELECT … ${value}\``（查询）、`db.sql.execute\`…\``（写入），值作为绑定参数，见 native.ts */
   readonly sql: SqlTag
 
@@ -125,10 +127,73 @@ export class Db<S extends AnySchema> {
     return new Db({ ...this.ctx, schema }, this.adapter, keys, this.inTransaction)
   }
 
-  /** work 里用 tx 执行的语句在同一个事务里；work 抛错时回滚 */
+  /**
+   * 一个绑定了取消信号的 Db：通过它发出的所有语句（含事务里的）遵守这个信号。
+   * 信号已取消时新语句直接失败；执行中取消则不再等待结果，立刻以信号的 reason 失败。
+   * 这只是"客户端不再等"，数据库里的语句不会被终止。超时：`db.withSignal(AbortSignal.timeout(5000))`。
+   */
+  withSignal(signal: AbortSignal): Db<S> {
+    return new Db({ ...this.ctx, signal }, this.adapter, this.keys, this.inTransaction)
+  }
+
+  /**
+   * work 里用 tx 执行的语句在同一个事务里；work 抛错时回滚。
+   * 已经在事务里再调用，开的是嵌套事务（保存点）：work 抛错只回滚到保存点，外层事务不受影响（异常仍会抛出，由调用方决定要不要吞掉）。
+   */
   async transaction<T>(work: (tx: Db<S>) => Promise<T>, options?: TransactionOptions): Promise<T> {
-    if (this.inTransaction) throw new Error('nested transactions are not supported; use the outer tx')
+    if (this.inTransaction) {
+      if (options?.isolation || options?.readOnly) throw new Error('a nested transaction cannot change isolation or read-only; set them on the outermost transaction')
+      return this.nested(work)
+    }
     return this.adapter.driver.transaction((session: Session) => work(new Db({ ...this.ctx, session }, this.adapter, this.keys, true)), options)
+  }
+
+  /** 嵌套事务：SAVEPOINT，成功则释放，失败则回滚到保存点 */
+  private async nested<T>(work: (tx: Db<S>) => Promise<T>): Promise<T> {
+    const dialect = this.ctx.dialect
+    const name = `eqts_sp_${++this.savepoints.n}`
+    await execute(this.ctx, { sql: dialect.savepoint(name), params: [] })
+    const release = dialect.releaseSavepoint(name)
+    try {
+      const result = await work(this)
+      if (release) await execute(this.ctx, { sql: release, params: [] })
+      return result
+    } catch (error) {
+      // 回滚本身失败（比如连接已断）不能盖住原来的错误
+      try {
+        await execute(this.ctx, { sql: dialect.rollbackToSavepoint(name), params: [] })
+        if (release) await execute(this.ctx, { sql: release, params: [] })
+      } catch { /* 保留 work 抛出的原始错误 */ }
+      throw error
+    }
+  }
+
+  /**
+   * 手动开始一个事务，配合 `await using` 使用：离开作用域时没提交就自动回滚，不用多包一层回调。
+   * ```ts
+   * await using tx = await db.begin()
+   * await tx.insert(User).values(row).execute()
+   * if (bad) return                // 提前返回：自动回滚
+   * await tx.commit()
+   * ```
+   */
+  async begin(options?: TransactionOptions): Promise<Transaction<S>> {
+    if (this.inTransaction) throw new Error('begin() cannot be used inside a transaction; use transaction() for a nested one')
+    // 驱动只提供"回调式"事务：在回调里等一个"提交 / 回滚"的决定，决定下来回调才返回，驱动随即提交或回滚
+    let decide!: (commit: boolean) => void
+    const decision = new Promise<boolean>((resolve) => { decide = resolve })
+    let finished!: Promise<void>
+    const transaction = await new Promise<Transaction<S>>((resolve, reject) => {
+      finished = this.adapter.driver.transaction(async (session: Session) => {
+        resolve(new Transaction({ ...this.ctx, session }, this.adapter, this.keys, {
+          finish: async (commit) => { decide(commit); await finished },
+        }))
+        if (!(await decision)) throw ROLLBACK
+      }, options).then(() => undefined, (error: unknown) => {
+        if (error !== ROLLBACK) { reject(error); throw error }
+      })
+    })
+    return transaction
   }
 
   private key<K>(entity: Entity): K {
@@ -138,11 +203,42 @@ export class Db<S extends AnySchema> {
   }
 }
 
+/** begin() 里用来表示"回滚"的哨兵：让驱动的回调抛出它，驱动据此回滚，再被吞掉 */
+const ROLLBACK = Symbol('eqts.rollback')
+
+/** begin() 的结果：一个 Db，外加 commit / rollback；`await using` 离开作用域时没结束就回滚 */
+export class Transaction<S extends AnySchema> extends Db<S> {
+  private readonly control: { finish(commit: boolean): Promise<void> }
+  private done = false
+
+  constructor(ctx: Context, adapter: Adapter, keys: Map<Entity, string>, control: { finish(commit: boolean): Promise<void> }) {
+    super(ctx, adapter, keys, true)
+    this.control = control
+  }
+
+  async commit(): Promise<void> {
+    if (this.done) throw new Error('the transaction is already finished')
+    this.done = true
+    await this.control.finish(true)
+  }
+
+  /** 回滚；已经提交或回滚过则什么也不做（所以 `await using` 在提交之后离开作用域是安全的） */
+  async rollback(): Promise<void> {
+    if (this.done) return
+    this.done = true
+    await this.control.finish(false)
+  }
+
+  async [Symbol.asyncDispose](): Promise<void> {
+    await this.rollback()
+  }
+}
+
 export function createDb<S extends AnySchema>(options: DbOptions<S>): Db<S> {
   const keys = new Map<Entity, string>()
   for (const [key, entity] of Object.entries(options.schema.entities)) keys.set(entity, key)
   const ctx: Context = {
-    schema: options.schema, dialect: options.adapter.dialect, session: options.adapter.driver, log: options.log, onExecute: options.onExecute,
+    schema: options.schema, dialect: options.adapter.dialect, session: options.adapter.driver, log: options.log, onExecute: options.onExecute, signal: undefined,
     // 列修饰器驱动的内置规则在前，用户的拦截器在后
     interceptors: new Interceptors([...columnRules(), ...(options.interceptors ?? [])]),
   }
