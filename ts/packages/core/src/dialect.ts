@@ -101,6 +101,11 @@ export abstract class Dialect {
     return " ESCAPE '\\'"
   }
 
+  /** 把编码后的参数绑定进语句，返回它在 SQL 里的写法；默认是占位符。驱动不能可靠传递的值（见 MySQL 的 bigint）可以覆盖成字面量 */
+  protected bindParam(value: unknown, w: SqlWriter): string {
+    return w.bind(this, value)
+  }
+
   /** 没有列编码时，JS 值 → 驱动接受的参数 */
   encodeParam(value: unknown): unknown {
     if (value instanceof Date) return utcText(value)
@@ -166,7 +171,7 @@ export abstract class Dialect {
     switch (n.k) {
       case 'col': return `${n.alias}.${this.quote(n.name)}`
       // 列编码之后再交给方言：例如布尔列编码后仍是布尔，由方言决定写 1 / 0 还是 true / false
-      case 'param': return w.bind(this, n.value == null ? null : this.encodeParam(n.codec ? n.codec.encode(n.value) : n.value))
+      case 'param': return this.bindParam(n.value == null ? null : this.encodeParam(n.codec ? n.codec.encode(n.value) : n.value), w)
       case 'lit': return n.sql
       case 'raw': return n.parts.reduce((s, part, i) => s + part + (i < n.args.length ? this.node(n.args[i]!, w) : ''), '')
       case 'op': return `${this.operand(n.l, w)} ${n.op} ${this.operand(n.r, w)}`

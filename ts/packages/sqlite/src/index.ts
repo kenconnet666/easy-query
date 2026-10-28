@@ -47,15 +47,28 @@ export class SqliteDialect extends Dialect {
   }
 }
 
+export interface SqliteOptions {
+  /**
+   * 整数列按 bigint 读出（再由列的 codec 转成 number / bigint / string）。
+   * SQLite 的整数是 64 位，node:sqlite 默认读成 JS number，超过 2^53 会丢精度；用 `col.bigint({ mode: 'bigint' })` 存雪花 id 之类的大整数时要打开。
+   * 默认关闭：打开后没有 codec 的原生片段（`sql\`...\``）读出的整数也是 bigint。
+   */
+  readonly bigInts?: boolean
+}
+
 class SqliteSession implements Session {
   protected readonly database: DatabaseSync
+  private readonly bigInts: boolean
 
-  constructor(database: DatabaseSync) {
+  constructor(database: DatabaseSync, options: SqliteOptions = {}) {
     this.database = database
+    this.bigInts = options.bigInts ?? false
   }
 
   async query(sql: string, params: readonly unknown[]): Promise<Record<string, unknown>[]> {
-    return this.database.prepare(sql).all(...(params as SQLInputValue[])) as Record<string, unknown>[]
+    const statement = this.database.prepare(sql)
+    if (this.bigInts) statement.setReadBigInts(true)
+    return statement.all(...(params as SQLInputValue[])) as Record<string, unknown>[]
   }
 
   async execute(sql: string, params: readonly unknown[]): Promise<ExecuteResult> {
@@ -85,6 +98,6 @@ class SqliteDriver extends SqliteSession implements Driver {
   }
 }
 
-export function sqlite(database: DatabaseSync): Adapter {
-  return { dialect: new SqliteDialect(), driver: new SqliteDriver(database) }
+export function sqlite(database: DatabaseSync, options: SqliteOptions = {}): Adapter {
+  return { dialect: new SqliteDialect(), driver: new SqliteDriver(database, options) }
 }

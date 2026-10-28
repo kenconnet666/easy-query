@@ -8,7 +8,7 @@
  * TIMESTAMP 列会按会话时区换算，建议连接池设 `timezone: 'Z'` 并让会话时区为 +00:00。
  */
 import type { Pool, PoolConnection, ResultSetHeader } from 'mysql2/promise'
-import { Dialect, type Adapter, type ConflictNode, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type TransactionOptions } from '@eqts/core'
+import { Dialect, type Adapter, type ConflictNode, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type SqlWriter, type TransactionOptions } from '@eqts/core'
 import { mysqlFunctions } from './functions.ts'
 
 export { MySQL } from './functions.ts'
@@ -21,6 +21,15 @@ export class MySqlDialect extends Dialect {
   readonly name = 'mysql'
   /** MySQL 预处理语句最多 65535 个占位符 */
   override readonly maxBindParams = 65535
+
+  /**
+   * mysql2 的 query 在客户端把参数插进 SQL：bigint 会被写成带引号的字符串，`BIGINT + '1'` 在 MySQL 里按 DOUBLE 运算，
+   * 超过 2^53 的值就丢精度。bigint 只含数字和负号，直接写成整数字面量；二进制统一成 Buffer（mysql2 只认 Buffer）。
+   */
+  protected override bindParam(value: unknown, w: SqlWriter): string {
+    if (typeof value === 'bigint') return value.toString()
+    return super.bindParam(value instanceof Uint8Array && !Buffer.isBuffer(value) ? Buffer.from(value) : value, w)
+  }
 
   /** MySQL.json / MySQL.match 的函数（见 functions.ts） */
   protected override functions(): Record<string, FunctionRenderer> {

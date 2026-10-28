@@ -10,6 +10,12 @@
   },
   "dependencies": {
     "@eqts/core": "workspace:*",
-    "@eqts/sqlite": "workspace:*"
+    "@eqts/sqlite": "workspace:*",
+    "@eqts/decimal": "workspace:*",
+    "@eqts/date": "workspace:*"
+  },
+  "devDependencies": {
+    "decimal.js": "10.6.0",
+    "@internationalized/date": "3.12.4"
   }
 }

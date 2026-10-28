@@ -1,0 +1,10 @@
+{
+  "name": "@eqts/decimal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@eqts/core": "workspace:*" },
+  "peerDependencies": { "decimal.js": "^10.6.0" },
+  "devDependencies": { "decimal.js": "10.6.0" }
+}

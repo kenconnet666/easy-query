@@ -12,11 +12,13 @@ import { liveSuite } from '@eqts/test/suite'
 import { MySQL, mysql } from '../src/index.ts'
 
 const DDL = [
-  'DROP TABLE IF EXISTS t_comment, t_post, t_user, t_company',
+  'DROP TABLE IF EXISTS t_ext, t_comment, t_post, t_user, t_company',
   'CREATE TABLE t_company (id BIGINT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL)',
   'CREATE TABLE t_user (id BIGINT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL, age INT, company_id BIGINT, attrs JSON NOT NULL, created_at DATETIME(3) NOT NULL)',
   'CREATE TABLE t_post (id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL, title VARCHAR(200) NOT NULL, amount DECIMAL(12,2) NOT NULL, FULLTEXT KEY ft_title (title))',
   'CREATE TABLE t_comment (id BIGINT AUTO_INCREMENT PRIMARY KEY, post_id BIGINT NOT NULL, body VARCHAR(200) NOT NULL)',
+  // t_ext：@eqts/decimal、@eqts/date 与 64 位整数的往返
+  'CREATE TABLE t_ext (id BIGINT AUTO_INCREMENT PRIMARY KEY, amount DECIMAL(12,2) NOT NULL, big BIGINT NOT NULL, day DATE NOT NULL, starts_at DATETIME(3) NOT NULL, at DATETIME(3) NOT NULL, clock TIME NOT NULL, raw BLOB NOT NULL)',
 ]
 
 const urls = (process.env['EQTS_MYSQL_URLS'] ?? '').split(',').map((u) => u.trim()).filter(Boolean)
@@ -48,7 +50,7 @@ for (const url of urls) {
     return { db: createDb({ schema, adapter, log: (s) => statements.push(s) }), statements, adapter }
   }
 
-  liveSuite(`mysql ${new URL(url).port}`, open)
+  liveSuite(`mysql ${new URL(url).port}`, open, { extensionTypes: true })
 
   describe(`mysql ${new URL(url).port}: MySQL.* functions`, () => {
     it('json predicates and full-text match', async () => {

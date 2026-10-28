@@ -2,6 +2,8 @@
  * 各方言共用的测试实体与种子数据。建表语句各方言自己写（类型不同），列名一致。
  */
 import { col, defineSchema, entity, type Adapter, type Db, type Statement } from '@eqts/core'
+import { calendarDate, calendarDateTime, timeOfDay, zonedDateTime } from '@eqts/date'
+import { decimalJs } from '@eqts/decimal'
 
 export const Company = entity('t_company', {
   id: col.bigint().primaryKey().generated(),
@@ -30,7 +32,22 @@ export const Comment = entity('t_comment', {
   body: col.string(),
 })
 
-export const schema = defineSchema({ Company, User, Post, Comment }, {
+/**
+ * 扩展列类型的往返：decimal.js、64 位整数、@internationalized/date 的四种类型。
+ * 只有开了 extensionTypes 的实库套件会建这张表（HANA 暂未验证）。
+ */
+export const Ext = entity('t_ext', {
+  id: col.bigint().primaryKey().generated(),
+  amount: decimalJs(12, 2),
+  big: col.bigint({ mode: 'bigint' }),
+  day: calendarDate(),
+  startsAt: calendarDateTime(),
+  at: zonedDateTime('Asia/Shanghai'),
+  clock: timeOfDay(),
+  raw: col.bytes(),
+})
+
+export const schema = defineSchema({ Company, User, Post, Comment, Ext }, {
   Company: (r) => ({ users: r.many('User', { from: 'id', to: 'companyId' }) }),
   User: (r) => ({
     company: r.one('Company', { from: 'companyId', to: 'id' }),

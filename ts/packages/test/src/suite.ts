@@ -4,9 +4,16 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { and, caseWhen, createDb, or, touch, win, type Expr, type Interceptor } from '@eqts/core'
-import { Comment, Company, Post, schema, seed, User, type TestEnv } from './fixture.ts'
+import { CalendarDateTime, fromDate, parseDate, Time } from '@internationalized/date'
+import { Decimal } from 'decimal.js'
+import { Comment, Company, Ext, Post, schema, seed, User, type TestEnv } from './fixture.ts'
 
-export function liveSuite(name: string, open: () => Promise<TestEnv>): void {
+export interface LiveSuiteOptions {
+  /** 库里建了 t_ext 表，可以跑 decimal.js / bigint / @internationalized/date 的往返用例 */
+  readonly extensionTypes?: boolean
+}
+
+export function liveSuite(name: string, open: () => Promise<TestEnv>, options: LiveSuiteOptions = {}): void {
   const seeded = async () => seed(await open())
 
   describe(`${name}: queries`, () => {
@@ -362,6 +369,72 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>): void {
       assert.deepEqual(names, ['alice'])
       // CASE 当聚合的参数：金额大于 5 的帖子数（10.50 与 2000.00 两篇）
       assert.equal(Number(await db.queryable(Post).sum((p) => caseWhen(p.amount.gt('5'), 1).else(0))), 2)
+    })
+  })
+
+  describe(`${name}: extension column types`, { skip: !options.extensionTypes }, () => {
+    const at = new Date('2026-01-02T03:04:05.006Z')
+    const row = (amount: string, big: bigint) => ({
+      amount: new Decimal(amount), big, day: parseDate('2026-01-02'),
+      startsAt: new CalendarDateTime(2026, 1, 2, 3, 4, 5, 6), at: fromDate(at, 'Asia/Shanghai'), clock: new Time(8, 30, 15), raw: Uint8Array.from([0, 1, 2, 254, 255]),
+    })
+
+    it('round-trips decimal.js, 64-bit integers and every @internationalized/date type', async () => {
+      const { db } = await seeded()
+      // 2^53 + 1：number 表示不了，往返后必须一模一样
+      const big = 9007199254740993n
+      await db.insert(Ext).values(row('10.50', big)).execute()
+      const back = await db.queryable(Ext).single()
+      assert.ok(back.amount instanceof Decimal)
+      assert.equal(back.amount.toFixed(2), '10.50')
+      assert.equal(back.big, big)
+      assert.equal(back.day.toString(), '2026-01-02')
+      assert.equal(back.startsAt.toString(), '2026-01-02T03:04:05.006')
+      // 同一个时刻，读出时换算到 Asia/Shanghai（UTC+8）
+      assert.equal(back.at.toDate().toISOString(), at.toISOString())
+      assert.equal(back.at.timeZone, 'Asia/Shanghai')
+      assert.equal(back.at.hour, 11)
+      assert.equal(back.clock.toString(), '08:30:15')
+      // 二进制：读出是普通的 Uint8Array（不是 Buffer），内容一致
+      assert.ok(!(back.raw instanceof Buffer))
+      assert.deepEqual(back.raw, Uint8Array.from([0, 1, 2, 254, 255]))
+    })
+
+    it('compares and filters with the extension types', async () => {
+      const { db } = await seeded()
+      await db.insert(Ext).values([row('10.50', 9007199254740993n), row('0.25', 1n)]).execute()
+      assert.equal(await db.queryable(Ext).where((e) => e.amount.gt(new Decimal('5'))).count(), 1)
+      assert.equal(await db.queryable(Ext).where((e) => e.big.eq(9007199254740993n)).count(), 1)
+      assert.equal(await db.queryable(Ext).where((e) => e.day.ge(parseDate('2026-01-02'))).count(), 2)
+      assert.equal(await db.queryable(Ext).where((e) => e.day.gt(parseDate('2026-01-02'))).count(), 0)
+      assert.equal(await db.queryable(Ext).where((e) => e.startsAt.eq(new CalendarDateTime(2026, 1, 2, 3, 4, 5, 6))).count(), 2)
+      assert.equal(await db.queryable(Ext).where((e) => e.at.eq(fromDate(at, 'Asia/Shanghai'))).count(), 2)
+      // year / month / day 认得这些类型
+      const parts = await db.queryable(Ext).select((e) => ({ y: e.day.year(), m: e.startsAt.month(), d: e.at.day() })).first()
+      assert.deepEqual(parts, { y: 2026, m: 1, d: 2 })
+    })
+
+    it('does exact arithmetic and aggregates on Decimal and bigint', async () => {
+      const { db } = await seeded()
+      // 浮点算 0.1 + 0.2 会得到 0.30000000000000004；Decimal 不会
+      await db.insert(Ext).values([row('0.10', 9007199254740993n), row('0.20', 2n)]).execute()
+      const sum = await db.queryable(Ext).sum((e) => e.amount)
+      assert.ok(sum instanceof Decimal)
+      assert.equal(sum.toFixed(2), '0.30')
+      assert.equal((await db.queryable(Ext).avg((e) => e.amount))?.toFixed(2), '0.15')
+      assert.equal((await db.queryable(Ext).max((e) => e.amount))?.toFixed(2), '0.20')
+      const rows = await db.queryable(Ext).orderBy((e) => e.id).select((e) => ({ doubled: e.amount.times(2), shifted: e.amount.plus(new Decimal('1.05')), next: e.big.plus(1n) })).toList()
+      assert.deepEqual(rows.map((r) => [r.doubled.toFixed(2), r.shifted.toFixed(2), r.next]), [['0.20', '1.15', 9007199254740994n], ['0.40', '1.25', 3n]])
+      assert.equal(await db.queryable(Ext).sum((e) => e.big), 9007199254740995n)
+      await db.update(Ext).set((e) => ({ amount: e.amount.times(3) })).where((e) => e.big.eq(2n)).execute()
+      assert.equal((await db.queryable(Ext).where((e) => e.big.eq(2n)).single()).amount.toFixed(2), '0.60')
+    })
+
+    it('adds days and diffs dates on @internationalized/date columns', async () => {
+      const { db } = await seeded()
+      await db.insert(Ext).values(row('1.00', 1n)).execute()
+      const r = await db.queryable(Ext).select((e) => ({ plus: e.day.addDays(30).month(), diff: e.day.diffDays(parseDate('2025-12-31')) })).single()
+      assert.deepEqual(r, { plus: 2, diff: 2 })
     })
   })
 

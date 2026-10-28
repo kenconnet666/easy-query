@@ -33,8 +33,12 @@ export type Numeric = number | bigint | DecimalText | NumericExtensions[keyof Nu
 /** 可以取年 / 月 / 日的值类型（string 是 date 列的 'YYYY-MM-DD'，精确区分留给后续的 Expr 类型门面） */
 export type Temporal = Date | string | TemporalExtensions[keyof TemporalExtensions]
 
-/** 算术右操作数：与左边同类型的值或表达式；十进制文字列额外接受 number，写 `amount.times(2)` 更顺手 */
-export type Arith<T> = Operand<T> | (NonNullable<T> extends DecimalText ? number : never)
+/**
+ * 算术右操作数：与左边同类型的值或表达式。
+ * 十进制文字列和第三方数值类型（如 decimal.js 的 Decimal）额外接受 number，写 `amount.times(2)` 更顺手；
+ * bigint 列只接受 bigint，避免把浮点数混进 64 位整数运算。
+ */
+export type Arith<T> = Operand<T> | (NonNullable<T> extends DecimalText | NumericExtensions[keyof NumericExtensions] ? number : never)
 
 /** T 可空时结果也可空 */
 type Keep<T, R> = null extends T ? R | null : R

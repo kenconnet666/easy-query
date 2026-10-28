@@ -13,11 +13,13 @@ import { Pg, postgres } from '../src/index.ts'
 
 const DDL = [
   'CREATE SCHEMA IF NOT EXISTS eqts',
-  'DROP TABLE IF EXISTS t_comment, t_post, t_user, t_company',
+  'DROP TABLE IF EXISTS t_ext, t_comment, t_post, t_user, t_company',
   'CREATE TABLE t_company (id BIGSERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL)',
   'CREATE TABLE t_user (id BIGSERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, age INT, company_id BIGINT, attrs JSONB NOT NULL, created_at TIMESTAMP(3) NOT NULL)',
   'CREATE TABLE t_post (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, title VARCHAR(200) NOT NULL, amount NUMERIC(12,2) NOT NULL)',
   'CREATE TABLE t_comment (id BIGSERIAL PRIMARY KEY, post_id BIGINT NOT NULL, body VARCHAR(200) NOT NULL)',
+  // t_ext：@eqts/decimal、@eqts/date 与 64 位整数的往返
+  'CREATE TABLE t_ext (id BIGSERIAL PRIMARY KEY, amount NUMERIC(12,2) NOT NULL, big BIGINT NOT NULL, day DATE NOT NULL, starts_at TIMESTAMP(3) NOT NULL, at TIMESTAMP(3) NOT NULL, clock TIME NOT NULL, raw BYTEA NOT NULL)',
 ]
 
 const urls = (process.env['EQTS_PG_URLS'] ?? '').split(',').map((u) => u.trim()).filter(Boolean)
@@ -39,7 +41,7 @@ for (const url of urls) {
     return { db: createDb({ schema, adapter, log: (s) => statements.push(s) }), statements, adapter }
   }
 
-  liveSuite(`postgres ${new URL(url).port}`, open)
+  liveSuite(`postgres ${new URL(url).port}`, open, { extensionTypes: true })
 
   describe(`postgres ${new URL(url).port}: Pg.* functions`, () => {
     it('jsonb, arrays and full-text search', async () => {

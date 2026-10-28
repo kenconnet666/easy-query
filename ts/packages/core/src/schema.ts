@@ -18,7 +18,13 @@ export interface Codec<T> {
   encode(value: T): unknown
 }
 
-export type ColumnKind = 'string' | 'int' | 'bigint' | 'decimal' | 'double' | 'boolean' | 'date' | 'time' | 'datetime' | 'json'
+/**
+ * 列的种类：决定聚合结果怎么解码（avg 对 decimal 保持 decimal）等少数行为。
+ * 内置种类之外允许任意字符串，扩展包可以登记自己的种类而不用改核心；未知的种类按"普通值"处理。
+ * 与 json-wire 的种类对应：bigint↔bigint、decimal↔decimal、date↔date、time↔time、
+ * datetime↔timestamp / timestamptz（是否带时区由列类型决定）、bytes↔bytes。
+ */
+export type ColumnKind = 'string' | 'int' | 'bigint' | 'decimal' | 'double' | 'boolean' | 'date' | 'time' | 'datetime' | 'json' | 'bytes' | (string & {})
 
 export interface ColumnOptions {
   readonly nullable: boolean
@@ -119,6 +125,13 @@ export function toDateText(raw: unknown): string {
   return String(raw).slice(0, 10)
 }
 
+/** 个别驱动 / 配置会把二进制读成十六进制文字（可带 \x 或 0x 前缀） */
+function hexToBytes(text: string): Uint8Array {
+  const hex = text.replace(/^(\\x|0x)/i, '')
+  if (hex.length % 2 !== 0 || /[^0-9a-f]/i.test(hex)) throw new TypeError(`not a hex string for a bytes column: ${text.slice(0, 20)}`)
+  return Uint8Array.from(hex.match(/../g) ?? [], (b) => parseInt(b, 16))
+}
+
 function base<T>(c: Codec<T>): Column<T, false, false> {
   return new Column(c, { nullable: false, primaryKey: false, generated: false, hasDefault: false })
 }
@@ -145,6 +158,8 @@ export const col = {
   time: () => base(codec<string>('time', (r) => String(r).slice(0, 8))),
   /** 时刻：JS 的 Date，库里按 UTC 存 */
   datetime: () => base(codec<Date>('datetime', toDate, (v) => utcText(v))),
+  /** 二进制：JS 里是 Uint8Array（驱动给的 Buffer 会复制成普通的 Uint8Array），库里是 BLOB / BYTEA */
+  bytes: () => base(codec<Uint8Array>('bytes', (r) => (typeof r === 'string' ? hexToBytes(r) : new Uint8Array(r as ArrayLike<number>)))),
   json: <T>() => base(codec<T>('json', (r) => (typeof r === 'string' ? JSON.parse(r) : r) as T, (v) => JSON.stringify(v))),
   /** 自定义的读写 */
   custom: <T>(kind: ColumnKind, decode: (raw: unknown) => T, encode: (value: T) => unknown) => base(codec<T>(kind, decode, encode)),
