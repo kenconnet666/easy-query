@@ -12,7 +12,7 @@ import { liveSuite } from '@eqts/test/suite'
 import { MySQL, mysql } from '../src/index.ts'
 
 const DDL = [
-  'DROP TABLE IF EXISTS t_note, t_member, t_user_role, t_role, t_ext, t_comment, t_post, t_user, t_company',
+  'DROP TABLE IF EXISTS t_doc, t_note, t_member, t_user_role, t_role, t_ext, t_comment, t_post, t_user, t_company',
   'CREATE TABLE t_company (id BIGINT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL)',
   'CREATE TABLE t_user (id BIGINT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL, age INT, company_id BIGINT, attrs JSON NOT NULL, created_at DATETIME(3) NOT NULL)',
   'CREATE TABLE t_post (id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL, title VARCHAR(200) NOT NULL, amount DECIMAL(12,2) NOT NULL, FULLTEXT KEY ft_title (title))',
@@ -24,6 +24,8 @@ const DDL = [
   'CREATE TABLE t_user_role (user_id BIGINT NOT NULL, role_id BIGINT NOT NULL, PRIMARY KEY (user_id, role_id))',
   'CREATE TABLE t_member (tenant_id INT NOT NULL, id INT NOT NULL, name VARCHAR(100) NOT NULL, PRIMARY KEY (tenant_id, id))',
   'CREATE TABLE t_note (id BIGINT AUTO_INCREMENT PRIMARY KEY, tenant_id INT NOT NULL, member_id INT NOT NULL, body VARCHAR(200) NOT NULL)',
+  // 列修饰器
+  `CREATE TABLE t_doc (id BIGINT AUTO_INCREMENT PRIMARY KEY, title VARCHAR(100) NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'draft', deleted BOOLEAN NOT NULL, version INT NOT NULL, created_by VARCHAR(100) NOT NULL, token VARCHAR(100) NOT NULL, updated_at DATETIME(3) NULL, secret VARCHAR(100) NOT NULL)`,
 ]
 
 const urls = (process.env['EQTS_MYSQL_URLS'] ?? '').split(',').map((u) => u.trim()).filter(Boolean)

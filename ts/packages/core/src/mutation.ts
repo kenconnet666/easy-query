@@ -7,7 +7,7 @@ import { condNode, Expr, toNode, type Cond } from './expr.ts'
 import { REF, Scope, type Ref } from './ref.ts'
 import type { AnySchema, EntityKey } from './relations.ts'
 import type { Entity, Insert, Row, ValueOf } from './schema.ts'
-import { refEntity } from './interceptor.ts'
+import { refEntity, type Interceptors } from './interceptor.ts'
 import { execute, query, type Context } from './session.ts'
 
 type EntityOf<S extends AnySchema, K extends EntityKey<S>> = S['entities'][K]
@@ -147,6 +147,10 @@ export type SetValues<S extends AnySchema, K extends EntityKey<S>> = {
 interface WriteState {
   readonly where: readonly ((r: any) => Cond)[]
   readonly all: boolean
+  /** delete 绕过逻辑删除，物理删除 */
+  readonly hard?: boolean
+  /** entity(row) 带了版本条件：一行都没更新到说明被别人改过，要抛错 */
+  readonly versionGuard?: boolean
 }
 
 abstract class Filtered {
@@ -162,7 +166,7 @@ abstract class Filtered {
 
   /** 新的构建现场：不允许 join（各库对 UPDATE/DELETE 带 JOIN 的写法不一致） */
   protected scope(): { scope: Scope; root: any; where: Node[] } {
-    const scope = new Scope(this.ctx.schema, { n: 0 }, false, (ref) => this.ctx.interceptors.filters(ref, refEntity(ref)))
+    const scope = new Scope(this.ctx.schema, { n: 0 }, false, (ref) => this.interceptors().filters(ref, refEntity(ref)))
     const root = scope.root(this.key)
     const where = this.state.where.map((f) => condNode(f(root))).filter((n): n is Node => n !== undefined)
     if (where.length === 0 && !this.state.all) {
@@ -173,6 +177,11 @@ abstract class Filtered {
   }
 
   protected abstract readonly verb: string
+
+  /** 这条写入语句生效的拦截器；delete(X).hard() 会关掉逻辑删除 */
+  protected interceptors(): Interceptors {
+    return this.ctx.interceptors
+  }
 
   async execute(): Promise<number> {
     return (await execute(this.ctx, this.toSQL())).affected
@@ -213,9 +222,30 @@ export class Updatable<S extends AnySchema, K extends EntityKey<S>> extends Filt
     for (const key of entity.primaryKey) {
       if (values[key] === undefined || values[key] === null) throw new Error(`update(..).entity(..) needs the primary key '${key}' of ${entity.table}`)
     }
-    const set = Object.fromEntries(Object.keys(entity.columns).filter((p) => !entity.primaryKey.includes(p) && values[p] !== undefined).map((p) => [p, values[p]]))
-    const byKey = (r: any) => entity.primaryKey.map((k) => (r[k] as Expr<unknown>).eq(values[k] as never))
-    return new Updatable(this.ctx, this.key as K, { ...this.state, where: [...this.state.where, byKey] }, () => set)
+    const set: Record<string, unknown> = Object.fromEntries(Object.keys(entity.columns)
+      .filter((p) => !entity.primaryKey.includes(p) && values[p] !== undefined && !entity.columns[p]!.options.insertOnly)
+      .map((p) => [p, values[p]]))
+    // 乐观锁：版本列作为条件，并写入加 1 后的版本；没有更新到行说明已被别人改过（见 execute）
+    const version = Object.keys(entity.columns).find((p) => entity.columns[p]!.options.version)
+    if (version !== undefined) {
+      const current = values[version]
+      if (current === undefined || current === null) throw new Error(`update(..).entity(..) needs the version '${version}' of ${entity.table}`)
+      set[version] = typeof current === 'bigint' ? current + 1n : Number(current) + 1
+    }
+    const byKey = (r: any) => [
+      ...entity.primaryKey.map((k) => (r[k] as Expr<unknown>).eq(values[k] as never)),
+      ...(version !== undefined ? [(r[version] as Expr<unknown>).eq(values[version] as never)] : []),
+    ]
+    return new Updatable(this.ctx, this.key as K, { ...this.state, where: [...this.state.where, byKey], versionGuard: version !== undefined }, () => set)
+  }
+
+  /** 带乐观锁条件的更新没有更新到任何行：行已被删除或已被别人改过 */
+  override async execute(): Promise<number> {
+    const affected = await super.execute()
+    if (affected === 0 && this.state.versionGuard) {
+      throw new Error(`optimistic lock failed: ${this.ctx.schema.entities[this.key]!.table} row was changed or deleted by someone else`)
+    }
+    return affected
   }
 
   all(): Updatable<S, K> {
@@ -226,7 +256,11 @@ export class Updatable<S extends AnySchema, K extends EntityKey<S>> extends Filt
     if (!this.values) throw new Error('update needs set(...)')
     const { root, where } = this.scope()
     const entity = this.ctx.schema.entities[this.key]!
-    const values = this.ctx.interceptors.beforeUpdate(this.values(root), entity)
+    const given = this.values(root)
+    for (const p of Object.keys(given)) {
+      if (given[p] !== undefined && entity.columns[p]?.options.insertOnly) throw new Error(`column '${p}' of ${entity.table} is insert-only and cannot be updated`)
+    }
+    const values = this.ctx.interceptors.beforeUpdate(given, entity)
     const set = Object.entries(values)
       .filter(([, v]) => v !== undefined)
       .map(([p, v]) => {
@@ -234,6 +268,12 @@ export class Updatable<S extends AnySchema, K extends EntityKey<S>> extends Filt
         if (!column) throw new Error(`${entity.table} has no column '${p}'`)
         return { column: entity.columnNames[p]!, e: toNode(v, column.codec) }
       })
+    // 乐观锁列：没有显式写版本的更新（表达式更新、批量更新）也让版本加 1，别人手里的旧版本就会失效
+    for (const [p, column] of Object.entries(entity.columns)) {
+      if (column.options.version && values[p] === undefined) {
+        set.push({ column: entity.columnNames[p]!, e: { k: 'op', op: '+', l: { k: 'col', alias: root[REF].alias, name: entity.columnNames[p]! }, r: { k: 'lit', sql: '1' } } })
+      }
+    }
     if (set.length === 0) throw new Error(`update of ${entity.table} sets no columns`)
     const node = { from: { table: entity.table, alias: root[REF].alias }, set, where }
     checkAliases(node)
@@ -257,10 +297,29 @@ export class Deletable<S extends AnySchema, K extends EntityKey<S>> extends Filt
     return new Deletable(this.ctx, this.key as K, { ...this.state, all: true })
   }
 
+  /** 物理删除：绕过逻辑删除（读过滤与改写成 update 都不再生效），已被逻辑删除的行也会被删掉 */
+  hard(): Deletable<S, K> {
+    return new Deletable(this.ctx, this.key as K, { ...this.state, hard: true })
+  }
+
+  protected override interceptors(): Interceptors {
+    return this.state.hard ? this.ctx.interceptors.without(['softDelete']) : this.ctx.interceptors
+  }
+
   toSQL(): Statement {
     const { root, where } = this.scope()
     const entity = this.ctx.schema.entities[this.key]!
-    const node = { from: { table: entity.table, alias: root[REF].alias }, where }
+    const from = { table: entity.table, alias: root[REF].alias }
+    // 逻辑删除：delete 改写成把标记列设为"已删除"的 update，条件不变（读过滤已经保证不会重复删）
+    const softSet = this.interceptors().deleteAsUpdate(entity)
+    if (softSet) {
+      const set = Object.entries(softSet).map(([p, v]) => ({ column: entity.columnNames[p]!, e: toNode(v, entity.columns[p]!.codec) }))
+      const update = { from, set, where }
+      checkAliases(update)
+      const w = new SqlWriter()
+      return { sql: this.ctx.dialect.update(update, w), params: w.params }
+    }
+    const node = { from, where }
     checkAliases(node)
     const w = new SqlWriter()
     return { sql: this.ctx.dialect.delete(node, w), params: w.params }

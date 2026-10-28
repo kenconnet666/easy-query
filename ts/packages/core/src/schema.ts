@@ -28,12 +28,33 @@ export interface Codec<T> {
  */
 export type ColumnKind = 'string' | 'int' | 'bigint' | 'decimal' | 'double' | 'boolean' | 'date' | 'time' | 'datetime' | 'json' | 'bytes' | (string & {})
 
+/** 逻辑删除：active 是"未删除"时的值（null 表示 IS NULL），deleted 是删除时写入的值（可以是函数，如当前时间） */
+export interface SoftDelete {
+  readonly active: unknown
+  readonly deleted: unknown
+}
+
 export interface ColumnOptions {
   readonly nullable: boolean
   readonly primaryKey: boolean
   readonly generated: boolean
   readonly hasDefault: boolean
   readonly name?: string
+  /** 插入时没给值就用它（客户端生成，如 uuid、雪花 id） */
+  readonly defaultFn?: (() => unknown) | undefined
+  /** 更新时没给值就用它（如更新时间） */
+  readonly onUpdateFn?: (() => unknown) | undefined
+  readonly softDelete?: SoftDelete | undefined
+  /** 乐观锁版本列 */
+  readonly version?: boolean | undefined
+  /** 只在插入时写入，更新永远不碰（创建人、创建时间） */
+  readonly insertOnly?: boolean | undefined
+}
+
+/** 字符串列的加解密策略：写入前 encrypt、读出后 decrypt。要用 eq 查询必须是确定性的（同一明文得到同一密文） */
+export interface Encryption {
+  encrypt(plain: string): string
+  decrypt(cipher: string): string
 }
 
 /** 一列：T 是 JS 类型，N 是否可空，O 插入时是否可省（自增、有默认值、可空） */
@@ -66,6 +87,51 @@ export class Column<T, N extends boolean = false, O extends boolean = false> {
   /** 库里有默认值：插入时可省 */
   defaulted(): Column<T, N, true> {
     return new Column(this.codec, { ...this.options, hasDefault: true })
+  }
+
+  /** 插入时没给值就调用 fn 生成（uuid、雪花 id 等客户端生成的默认值）；插入时这一列可省 */
+  $default(fn: () => T): Column<T, N, true> {
+    return new Column(this.codec, { ...this.options, defaultFn: fn })
+  }
+
+  /** 更新时没给值就调用 fn（更新时间、更新人） */
+  $onUpdate(fn: () => T): Column<T, N, O> {
+    return new Column(this.codec, { ...this.options, onUpdateFn: fn })
+  }
+
+  /** 只改 TS 类型不改运行时：品牌类型（`col.bigint().$type<UserId>()`）让不同表的 id 不能混用 */
+  $type<U extends T>(): Column<U, N, O> {
+    return new Column(this.codec as unknown as Codec<U>, this.options)
+  }
+
+  /**
+   * 逻辑删除列：delete 改写成把这一列设为 deleted 的 update；读、改、删（含导航的 JOIN 与子查询）自动只看 active 的行；
+   * 插入时没给值就写 active。不传参数时布尔列是 false / true，整数列是 0 / 1；其它类型（如可空时间戳 `{ active: null, deleted: () => new Date() }`）要显式给。
+   * 单条语句用 `noInterceptor('softDelete')` 看到已删除的行；`delete(X).hard()` 物理删除。
+   */
+  softDelete(values?: { active: T | null; deleted: T | (() => T) }): Column<T, N, true> {
+    const kind = this.codec.kind
+    const chosen = values ?? (kind === 'boolean' ? { active: false, deleted: true } : kind === 'int' || kind === 'bigint' ? { active: 0, deleted: 1 } : undefined)
+    if (!chosen) throw new Error(`softDelete() needs explicit { active, deleted } values on a '${kind}' column`)
+    return new Column(this.codec, { ...this.options, softDelete: chosen })
+  }
+
+  /** 乐观锁版本列（整数）：插入为 0；`update(X).entity(row)` 带上版本条件并加 1，没更新到行就抛错；其它更新自动加 1 */
+  version(): Column<T, N, true> {
+    if (this.codec.kind !== 'int' && this.codec.kind !== 'bigint') throw new Error(`version() needs an integer column, got '${this.codec.kind}'`)
+    return new Column(this.codec, { ...this.options, version: true })
+  }
+
+  /** 只在插入时写入，更新永远不碰；在 set 里给它赋值会报错 */
+  insertOnly(): Column<T, N, O> {
+    return new Column(this.codec, { ...this.options, insertOnly: true })
+  }
+
+  /** 透明加解密（仅字符串列） */
+  encrypted(this: Column<string, N, O>, strategy: Encryption): Column<string, N, O> {
+    const inner = this.codec
+    const codec: Codec<string> = { kind: inner.kind, decode: (raw) => strategy.decrypt(inner.decode(raw)), encode: (v) => inner.encode(strategy.encrypt(v)) }
+    return new Column(codec, this.options)
   }
 
   /** 库里的列名（默认是属性名转下划线） */
@@ -163,6 +229,14 @@ export const col = {
   /** 二进制：JS 里是 Uint8Array（驱动给的 Buffer 会复制成普通的 Uint8Array），库里是 BLOB / BYTEA */
   bytes: () => base(codec<Uint8Array>('bytes', (r) => (typeof r === 'string' ? hexToBytes(r) : new Uint8Array(r as ArrayLike<number>)))),
   json: <T>() => base(codec<T>('json', (r) => (typeof r === 'string' ? JSON.parse(r) : r) as T, (v) => JSON.stringify(v))),
+  /** 字符串枚举：写入和读出都校验在列表里，TS 类型是这些字面量的并集 */
+  enum: <const V extends string>(values: readonly V[]) => {
+    const check = (v: unknown): V => {
+      if (!values.includes(v as V)) throw new TypeError(`'${String(v)}' is not one of ${values.map((x) => `'${x}'`).join(', ')}`)
+      return v as V
+    }
+    return base(codec<V>('string', (r) => check(String(r)), check))
+  },
   /** 自定义的读写 */
   custom: <T>(kind: ColumnKind, decode: (raw: unknown) => T, encode: (value: T) => unknown) => base(codec<T>(kind, decode, encode)),
 }

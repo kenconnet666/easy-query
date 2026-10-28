@@ -7,7 +7,7 @@
  * ```
  */
 import type { Statement } from './dialect.ts'
-import { Interceptors, type Interceptor } from './interceptor.ts'
+import { columnRules, Interceptors, type Interceptor } from './interceptor.ts'
 import { Deletable, Insertable, Updatable } from './mutation.ts'
 import { cteEntity, newQueryable, recursiveCteEntity, type Query, type Queryable } from './query.ts'
 import type { AnySchema, EntityKey, Schema } from './relations.ts'
@@ -143,7 +143,8 @@ export function createDb<S extends AnySchema>(options: DbOptions<S>): Db<S> {
   for (const [key, entity] of Object.entries(options.schema.entities)) keys.set(entity, key)
   const ctx: Context = {
     schema: options.schema, dialect: options.adapter.dialect, session: options.adapter.driver, log: options.log, onExecute: options.onExecute,
-    interceptors: new Interceptors(options.interceptors ?? []),
+    // 列修饰器驱动的内置规则在前，用户的拦截器在后
+    interceptors: new Interceptors([...columnRules(), ...(options.interceptors ?? [])]),
   }
   return new Db(ctx, options.adapter, keys, false)
 }

@@ -72,7 +72,29 @@ export const Note = entity('t_note', {
   body: col.string(),
 })
 
-export const schema = defineSchema({ Company, User, Post, Comment, Ext, Role, UserRole, Member, Note }, {
+/** 凯撒位移 13：确定性的"加密"，测试透明加解密用 */
+export const rot13 = {
+  encrypt: (v: string): string => v.replace(/[a-z]/gi, (c) => {
+    const base = c <= 'Z' ? 65 : 97
+    return String.fromCharCode(((c.charCodeAt(0) - base + 13) % 26) + base)
+  }),
+  decrypt: (v: string): string => rot13.encrypt(v),
+}
+
+/** 用到全部列修饰器的实体：逻辑删除、乐观锁、客户端默认值、更新时填值、只插入、枚举、透明加密 */
+export const Doc = entity('t_doc', {
+  id: col.bigint().primaryKey().generated(),
+  title: col.string(),
+  status: col.enum(['draft', 'published'] as const).defaulted(),
+  deleted: col.boolean().softDelete(),
+  version: col.int().version(),
+  createdBy: col.string().insertOnly(),
+  token: col.string().$default(() => 'tok'),
+  updatedAt: col.datetime().nullable().$onUpdate(() => new Date('2026-05-06T07:08:09.000Z')),
+  secret: col.string().encrypted(rot13),
+})
+
+export const schema = defineSchema({ Company, User, Post, Comment, Ext, Role, UserRole, Member, Note, Doc }, {
   Company: (r) => ({ users: r.many('User', { from: 'id', to: 'companyId' }) }),
   User: (r) => ({
     company: r.one('Company', { from: 'companyId', to: 'id' }),

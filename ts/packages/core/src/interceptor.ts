@@ -9,7 +9,7 @@
 import type { Node } from './ast.ts'
 import { condNode, type Cond } from './expr.ts'
 import { refColumn, REF, type AnyRef } from './ref.ts'
-import type { Entity } from './schema.ts'
+import type { ColumnOptions, Entity } from './schema.ts'
 
 export interface Interceptor {
   /** 用于 noInterceptor(name) */
@@ -20,6 +20,57 @@ export interface Interceptor {
   beforeInsert?(row: Record<string, unknown>, entity: Entity): void
   /** 更新前补 set 的值；set 是副本，可以直接改 */
   beforeUpdate?(set: Record<string, unknown>, entity: Entity): void
+  /** 删除前询问：返回值表示"不要物理删除，改成把这些列更新成这些值"（逻辑删除）；返回 undefined 表示照常删除 */
+  deleteAs?(entity: Entity): Record<string, unknown> | undefined
+}
+
+/** 某个实体上带有指定选项的列（属性名 + 选项） */
+function columnsWith<K extends keyof ColumnOptions>(entity: Entity, option: K): { prop: string; value: NonNullable<ColumnOptions[K]> }[] {
+  const found: { prop: string; value: NonNullable<ColumnOptions[K]> }[] = []
+  for (const [prop, column] of Object.entries(entity.columns)) {
+    const value = column.options[option]
+    if (value !== undefined && value !== false) found.push({ prop, value: value as NonNullable<ColumnOptions[K]> })
+  }
+  return found
+}
+
+/** 逻辑删除列的值：deleted 可以是函数（如当前时间），每次用时求值 */
+const valueOf = (v: unknown): unknown => (typeof v === 'function' ? (v as () => unknown)() : v)
+
+/**
+ * 由列修饰器驱动的内置拦截器，createDb 自动安装（用户的拦截器排在后面）：
+ * - defaults：`$default` 在插入时补值、`$onUpdate` 在更新时补值、version 列插入为 0；
+ * - softDelete：逻辑删除列的读过滤、插入默认值、delete 改写成 update。可以用 `noInterceptor('softDelete')` 关掉。
+ */
+export function columnRules(): Interceptor[] {
+  const defaults: Interceptor = {
+    name: 'defaults',
+    beforeInsert: (row, entity) => {
+      for (const { prop, value } of columnsWith(entity, 'defaultFn')) if (row[prop] === undefined) row[prop] = value()
+      for (const { prop } of columnsWith(entity, 'version')) if (row[prop] === undefined) row[prop] = 0
+    },
+    beforeUpdate: (set, entity) => {
+      for (const { prop, value } of columnsWith(entity, 'onUpdateFn')) if (set[prop] === undefined) set[prop] = value()
+    },
+  }
+  const softDelete: Interceptor = {
+    name: 'softDelete',
+    filter: (ref, entity) => {
+      const found = columnsWith(entity, 'softDelete')[0]
+      if (!found) return false
+      const column = refColumn(ref, found.prop)
+      return found.value.active === null ? column.isNull() : column.eq(found.value.active as never)
+    },
+    beforeInsert: (row, entity) => {
+      const found = columnsWith(entity, 'softDelete')[0]
+      if (found && row[found.prop] === undefined) row[found.prop] = found.value.active
+    },
+    deleteAs: (entity) => {
+      const found = columnsWith(entity, 'softDelete')[0]
+      return found ? { [found.prop]: valueOf(found.value.deleted) } : undefined
+    },
+  }
+  return [defaults, softDelete]
 }
 
 /**
@@ -65,6 +116,16 @@ export class Interceptors {
       if (n) nodes.push(n)
     }
     return nodes
+  }
+
+  /** 这个实体的 delete 要不要改写成 update：返回要更新的列，undefined 表示物理删除 */
+  deleteAsUpdate(entity: Entity): Record<string, unknown> | undefined {
+    let set: Record<string, unknown> | undefined
+    for (const interceptor of this.list) {
+      const part = interceptor.deleteAs?.(entity)
+      if (part) set = { ...set, ...part }
+    }
+    return set
   }
 
   beforeInsert(row: Record<string, unknown>, entity: Entity): Record<string, unknown> {

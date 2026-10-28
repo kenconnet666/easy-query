@@ -6,7 +6,7 @@ import { describe, it } from 'node:test'
 import { and, caseWhen, createDb, or, touch, win, type Expr, type ExecutionEvent, type Interceptor } from '@eqts/core'
 import { CalendarDateTime, fromDate, parseDate, Time } from '@internationalized/date'
 import { Decimal } from 'decimal.js'
-import { Comment, Company, Ext, Member, Note, Post, Role, schema, seed, User, UserRole, type TestEnv } from './fixture.ts'
+import { Comment, Company, Doc, Ext, Member, Note, Post, Role, schema, seed, User, UserRole, type TestEnv } from './fixture.ts'
 
 export interface LiveSuiteOptions {
   /** 库里建了 t_ext 表，可以跑 decimal.js / bigint / @internationalized/date 的往返用例 */
@@ -505,6 +505,82 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>, options: L
       const owners = await db.queryable(Note).orderBy((n) => n.body).select((n) => ({ body: n.body, owner: n.member.name })).toList()
       assert.deepEqual(owners.map((o) => [o.body, o.owner]), [['a', 'm1'], ['b', 'm1'], ['c', 'm3'], ['d', 'm2']])
       assert.equal(await db.queryable(Member).where((m) => m.notes.any((n) => n.body.eq('c'))).count(), 1)
+    })
+  })
+
+  describe(`${name}: column rules`, { skip: !options.extraTables }, () => {
+    const doc = (title: string) => ({ title, createdBy: 'ann', secret: 'hello' })
+
+    it('turns delete into an update and hides soft-deleted rows', async () => {
+      const { db } = await seeded()
+      await db.insert(Doc).values([doc('a'), doc('b'), doc('c')]).execute()
+      assert.equal(await db.delete(Doc).where((d) => d.id.eq(1)).execute(), 1)
+      assert.equal(await db.queryable(Doc).count(), 2)
+      // 单条语句关掉过滤，能看到被逻辑删除的行
+      const all = await db.queryable(Doc).noInterceptor('softDelete').orderBy((d) => d.id).toList()
+      assert.deepEqual(all.map((d) => [d.title, d.deleted]), [['a', true], ['b', false], ['c', false]])
+      // 已经删除的行读不到，再删一次什么也没做；更新也碰不到它
+      assert.equal(await db.delete(Doc).where((d) => d.id.eq(1)).execute(), 0)
+      assert.equal(await db.update(Doc).set({ title: 'x' }).where((d) => d.id.eq(1)).execute(), 0)
+      // hard() 才是物理删除
+      assert.equal(await db.delete(Doc).where((d) => d.id.eq(1)).hard().execute(), 1)
+      assert.equal(await db.queryable(Doc).noInterceptor('softDelete').count(), 2)
+    })
+
+    it('fills client defaults on insert and update-time values on update', async () => {
+      const { db } = await seeded()
+      await db.insert(Doc).values([doc('a'), { ...doc('b'), token: 'mine' }]).execute()
+      const rows = await db.queryable(Doc).orderBy((d) => d.id).toList()
+      // token 没给就用 $default；status 没给，用库里的默认值 draft；deleted 插入时默认写"未删除"
+      assert.deepEqual(rows.map((r) => [r.token, r.status, r.deleted, r.version, r.updatedAt]), [['tok', 'draft', false, 0, null], ['mine', 'draft', false, 0, null]])
+      await db.update(Doc).set({ title: 'a2' }).where((d) => d.id.eq(1)).execute()
+      assert.equal((await db.queryable(Doc).where((d) => d.id.eq(1)).single()).updatedAt?.toISOString(), '2026-05-06T07:08:09.000Z')
+      const given = new Date('2030-01-01T00:00:00.000Z')
+      await db.update(Doc).set({ title: 'b2', updatedAt: given }).where((d) => d.id.eq(2)).execute()
+      assert.equal((await db.queryable(Doc).where((d) => d.id.eq(2)).single()).updatedAt?.toISOString(), given.toISOString())
+    })
+
+    it('validates enum values on write and read', async () => {
+      const { db } = await seeded()
+      await assert.rejects(() => db.insert(Doc).values({ ...doc('a'), status: 'bogus' as never }).execute(), /not one of/)
+      await db.insert(Doc).values({ ...doc('a'), status: 'published' }).execute()
+      assert.equal((await db.queryable(Doc).single()).status, 'published')
+      // 库里被写进了不认识的值：读出时报错，而不是悄悄当成合法值
+      await db.sql.execute`UPDATE ${db.sql.ident('t_doc')} SET ${db.sql.ident('status')} = ${'weird'}`
+      await assert.rejects(() => db.queryable(Doc).toList(), /not one of/)
+    })
+
+    it('guards updates by version and bumps it on every update', async () => {
+      const { db } = await seeded()
+      await db.insert(Doc).values(doc('a')).execute()
+      const stale = await db.queryable(Doc).single()
+      assert.equal(stale.version, 0)
+      await db.update(Doc).entity({ ...stale, title: 'first' }).execute()
+      assert.equal((await db.queryable(Doc).single()).version, 1)
+      // 还拿着版本 0 的旧数据去更新：条件不满足，一行也没改到，抛错
+      await assert.rejects(() => db.update(Doc).entity({ ...stale, title: 'second' }).execute(), /optimistic lock/)
+      assert.equal((await db.queryable(Doc).single()).title, 'first')
+      // 表达式更新没有版本条件，但同样让版本加 1，别人手里的旧版本随之失效
+      await db.update(Doc).set({ title: 'third' }).where((d) => d.id.eq(1)).execute()
+      assert.equal((await db.queryable(Doc).single()).version, 2)
+    })
+
+    it('never updates insert-only columns', async () => {
+      const { db } = await seeded()
+      await db.insert(Doc).values(doc('a')).execute()
+      assert.throws(() => db.update(Doc).set({ createdBy: 'bob' }).where((d) => d.id.eq(1)).toSQL(), /insert-only/)
+      const row = await db.queryable(Doc).single()
+      await db.update(Doc).entity({ ...row, title: 'a2', createdBy: 'bob' }).execute()
+      assert.equal((await db.queryable(Doc).single()).createdBy, 'ann')
+    })
+
+    it('encrypts transparently, including in equality conditions', async () => {
+      const { db } = await seeded()
+      await db.insert(Doc).values(doc('a')).execute()
+      const raw = await db.sql`SELECT ${db.sql.ident('secret')} FROM ${db.sql.ident('t_doc')}`
+      assert.equal(Object.values(raw[0]!)[0], 'uryyb')
+      assert.equal((await db.queryable(Doc).single()).secret, 'hello')
+      assert.equal(await db.queryable(Doc).where((d) => d.secret.eq('hello')).count(), 1)
     })
   })
 

@@ -154,3 +154,23 @@ defineSchema({ Company, User }, {
   // @ts-expect-error 目标实体不存在
   User: (r) => ({ company: r.one('Nope', { from: 'companyId', to: 'id' }) }),
 })
+
+// 列修饰器：品牌类型、枚举、客户端默认值让插入时可省
+type UserId = number & { readonly __brand: 'UserId' }
+const Tagged = entity('t_tagged', {
+  id: col.bigint().primaryKey().generated().$type<UserId>(),
+  kind: col.enum(['a', 'b'] as const),
+  token: col.string().$default(() => 'x'),
+  gone: col.boolean().softDelete(),
+  version: col.int().version(),
+})
+expect<Equal<Row<typeof Tagged>['id'], UserId>>()
+expect<Equal<Row<typeof Tagged>['kind'], 'a' | 'b'>>()
+// token、gone、version 插入时可省；kind 必填
+expect<Equal<keyof Insert<typeof Tagged>, 'id' | 'kind' | 'token' | 'gone' | 'version'>>()
+const taggedDb = createDb({ schema: defineSchema({ Tagged }), adapter })
+taggedDb.insert(Tagged).values({ kind: 'a' })
+// @ts-expect-error 枚举之外的值
+taggedDb.insert(Tagged).values({ kind: 'c' })
+// @ts-expect-error kind 必填
+taggedDb.insert(Tagged).values({})
