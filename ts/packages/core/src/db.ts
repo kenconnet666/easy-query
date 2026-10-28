@@ -111,6 +111,25 @@ export class Db<S extends AnySchema> {
     return extended ?? this.extend(entity)
   }
 
+  /**
+   * 换表：这个 Db 上的查询把实体映射到别的表（热表 / 归档表、按月分表），导航、join、子查询、include 都跟着换，
+   * 不用改任何查询代码。映射的表要有同样的列；`mapTables({ Post: 't_post_2025' })`。
+   * 对应 Java 版的 TableNameMapping。
+   */
+  mapTables(mapping: { [K in EntityKey<S>]?: string }): Db<S> {
+    const entities: Record<string, Entity> = { ...this.ctx.schema.entities }
+    const keys = new Map(this.keys)
+    for (const [key, table] of Object.entries(mapping) as [string, string][]) {
+      const original = this.ctx.schema.entities[key]
+      if (!original) throw new Error(`mapTables: entity '${key}' is not part of the schema`)
+      if (original.derived) throw new Error(`mapTables: '${key}' is a derived table and has no table name to replace`)
+      // 复制一份换了表名的实体放进 schema；用户手里的原实体对象仍然指向同一个键
+      entities[key] = { ...original, table }
+      keys.set(entities[key]!, key)
+    }
+    return new Db({ ...this.ctx, schema: { ...this.ctx.schema, entities } }, this.adapter, keys, this.inTransaction)
+  }
+
   private freshName(name: string): string {
     if (name in this.ctx.schema.entities) throw new Error(`'${name}' is already an entity or CTE of this schema`)
     return name

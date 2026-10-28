@@ -59,6 +59,7 @@ export abstract class Dialect {
       add_days: (a) => `(${a[0]} + INTERVAL '${a[1]} day')`,
       add_months: (a) => `(${a[0]} + INTERVAL '${a[1]} month')`,
       diff_days: (a) => `(CAST(${a[0]} AS DATE) - CAST(${a[1]} AS DATE))`,
+      grouping: (a) => `GROUPING(${a[0]})`,
       // 类型转换：基类用标准类型名，各库差异覆盖
       cast_string: (a) => `CAST(${a[0]} AS VARCHAR(4000))`,
       cast_int: (a) => `CAST(${a[0]} AS INTEGER)`,
@@ -120,8 +121,17 @@ export abstract class Dialect {
     return s
   }
 
-  forUpdate(): string {
-    return ' FOR UPDATE'
+  /** 行锁子句。wait：nowait 立即报错、skip 跳过被锁的行（MySQL 8.0.1+、PG 的写法） */
+  forUpdate(wait?: 'nowait' | 'skip'): string {
+    return ' FOR UPDATE' + (wait === 'nowait' ? ' NOWAIT' : wait === 'skip' ? ' SKIP LOCKED' : '')
+  }
+
+  /** null 安全相等的运算符（MySQL `<=>`、PG `IS NOT DISTINCT FROM`）；没有的库写成 (a = b OR (a IS NULL AND b IS NULL)) */
+  readonly nullSafeEquals: string | undefined = undefined
+
+  /** GROUP BY 子句里的键列表：rollup / cube 默认写成 ROLLUP(…) / CUBE(…)（PG、HANA）；MySQL 等写法不同的库覆盖 */
+  groupByKeys(keys: string[], mode: 'rollup' | 'cube' | undefined): string {
+    return mode ? `${mode.toUpperCase()}(${keys.join(', ')})` : keys.join(', ')
   }
 
   /** 嵌套事务用的保存点语句；保存点名字由核心生成（只含字母数字下划线） */
@@ -162,15 +172,25 @@ export abstract class Dialect {
     let s = `SELECT ${q.distinct ? 'DISTINCT ' : ''}${cols} FROM ${q.from.sub ? `(${this.select(q.from.sub, w)})` : this.table(q.from.table)} ${q.from.alias}`
     for (const j of q.joins) s += ` ${j.kind === 'inner' ? 'INNER' : 'LEFT'} JOIN ${this.table(j.table)} ${j.alias} ON ${this.node(j.on, w)}`
     if (q.where.length > 0) s += ` WHERE ${this.conjunction(q.where, w)}`
-    if (q.groupBy.length > 0) s += ` GROUP BY ${q.groupBy.map((g) => this.node(g, w)).join(', ')}`
+    if (q.groupBy.length > 0) s += ` GROUP BY ${this.groupByKeys(q.groupBy.map((g) => this.node(g, w)), q.groupMode)}`
     if (q.having.length > 0) s += ` HAVING ${this.conjunction(q.having, w)}`
     if (q.orderBy.length > 0) s += ` ORDER BY ${q.orderBy.map((o) => this.node(o.e, w) + (o.desc ? ' DESC' : ' ASC')).join(', ')}`
     s += this.limitOffset(q.limit, q.offset)
-    if (q.forUpdate) s += this.forUpdate()
+    if (q.forUpdate) s += this.forUpdate(q.lockWait)
     return s
   }
 
+  /** 是否支持 INSERT / UPDATE / DELETE … RETURNING（PG、SQLite 3.35+；MySQL、HANA 没有） */
+  readonly supportsReturning: boolean = false
+
+  /** RETURNING 子句，列名已经是库里的名字 */
+  returningColumns(columns: readonly string[]): string {
+    if (!this.supportsReturning) throw new Error(`returning() is not supported by the ${this.name} dialect`)
+    return ` RETURNING ${columns.map((c) => this.quote(c)).join(', ')}`
+  }
+
   insert(q: InsertNode, w: SqlWriter = new SqlWriter()): string {
+    if (q.source) return `INSERT INTO ${this.table(q.table)} (${q.columns.map((c) => this.quote(c)).join(', ')}) ${this.select(q.source, w)}`
     const rows = q.rows.map((r) => `(${r.map((n) => this.node(n, w)).join(', ')})`).join(', ')
     return `INSERT INTO ${this.table(q.table)} (${q.columns.map((c) => this.quote(c)).join(', ')}) VALUES ${rows}${q.conflict ? this.onConflict(q.conflict) : ''}`
   }
@@ -215,6 +235,11 @@ export abstract class Dialect {
       case 'in':
         if (n.list.length === 0) return n.not ? '1 = 1' : '1 = 0'
         return `${this.operand(n.e, w)} ${n.not ? 'NOT ' : ''}IN (${n.list.map((i) => this.node(i, w)).join(', ')})`
+      case 'eq_ns': {
+        if (this.nullSafeEquals) return `${this.operand(n.l, w)} ${this.nullSafeEquals} ${this.operand(n.r, w)}`
+        // 没有专用运算符：两边各渲染两次（参数也各绑两次，顺序与文本一致）
+        return `(${this.operand(n.l, w)} = ${this.operand(n.r, w)} OR (${this.operand(n.l, w)} IS NULL AND ${this.operand(n.r, w)} IS NULL))`
+      }
       case 'in_sub': return `${this.operand(n.e, w)} ${n.not ? 'NOT ' : ''}IN (${this.select(n.q, w)})`
       case 'between': return `${this.operand(n.e, w)} BETWEEN ${this.operand(n.lo, w)} AND ${this.operand(n.hi, w)}`
       case 'like': return `${this.operand(n.e, w)} ${n.not ? 'NOT ' : ''}LIKE ${this.node(n.pattern, w)}${this.likeEscape()}`

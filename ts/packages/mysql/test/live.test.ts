@@ -57,7 +57,7 @@ for (const url of urls) {
     return { db: createDb({ schema, adapter, log: (s) => statements.push(s) }), statements, adapter }
   }
 
-  liveSuite(`mysql ${new URL(url).port}`, open, { extensionTypes: true, extraTables: true })
+  liveSuite(`mysql ${new URL(url).port}`, open, { extensionTypes: true, extraTables: true, cube: false, returning: false })
 
   describe(`mysql ${new URL(url).port}: MySQL.* functions`, () => {
     it('json predicates and full-text match', async () => {

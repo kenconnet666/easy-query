@@ -9,8 +9,34 @@
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { Dialect, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type TransactionOptions } from '@eqts/core'
 
+/** SQLite 的日期时间是文字：用 strftime 取整，结果仍是 'YYYY-MM-DD HH:MM:SS' */
+function dateTrunc(x: string, unit: string): string {
+  switch (unit) {
+    case 'year': return `strftime('%Y-01-01 00:00:00', ${x})`
+    // 季度：本季第一个月 = ((月 - 1) / 3) * 3 + 1
+    case 'quarter': return `(strftime('%Y-', ${x}) || printf('%02d', ((CAST(strftime('%m', ${x}) AS INTEGER) - 1) / 3) * 3 + 1) || '-01 00:00:00')`
+    case 'month': return `strftime('%Y-%m-01 00:00:00', ${x})`
+    // 'weekday 0' 先走到本周日（或当天就是周日），再退 6 天回到周一
+    case 'week': return `strftime('%Y-%m-%d 00:00:00', ${x}, 'weekday 0', '-6 days')`
+    case 'day': return `strftime('%Y-%m-%d 00:00:00', ${x})`
+    case 'hour': return `strftime('%Y-%m-%d %H:00:00', ${x})`
+    case 'minute': return `strftime('%Y-%m-%d %H:%M:00', ${x})`
+    default: return `strftime('%Y-%m-%d %H:%M:%S', ${x})`
+  }
+}
+
 export class SqliteDialect extends Dialect {
   readonly name = 'sqlite'
+  /** SQLite 的 IS 就是 null 安全的相等 */
+  override readonly nullSafeEquals = 'IS'
+  /** SQLite 3.35+（node:sqlite 自带的版本满足） */
+  override readonly supportsReturning = true
+
+  /** SQLite 没有 ROLLUP / CUBE */
+  override groupByKeys(keys: string[], mode: 'rollup' | 'cube' | undefined): string {
+    if (mode) throw new Error(`${mode}() is not supported by SQLite`)
+    return keys.join(', ')
+  }
 
   protected override functions(): Record<string, FunctionRenderer> {
     return {
@@ -33,6 +59,7 @@ export class SqliteDialect extends Dialect {
       add_days: (a) => `datetime(${a[0]}, '${a[1]} days')`,
       add_months: (a) => `datetime(${a[0]}, '${a[1]} months')`,
       diff_days: (a) => `CAST(ROUND(julianday(date(${a[0]})) - julianday(date(${a[1]}))) AS INTEGER)`,
+      date_trunc: (a) => dateTrunc(a[0]!, a[1]!.replace(/'/g, '')),
       cast_string: (a) => `CAST(${a[0]} AS TEXT)`,
       cast_double: (a) => `CAST(${a[0]} AS REAL)`,
       cast_decimal: (a) => `CAST(${a[0]} AS NUMERIC)`,

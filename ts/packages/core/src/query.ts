@@ -38,6 +38,8 @@ interface State {
   readonly offset: number | undefined
   readonly distinct: boolean
   readonly forUpdate: boolean
+  readonly lockWait: 'nowait' | 'skip' | undefined
+  readonly groupMode: 'rollup' | 'cube' | undefined
   /** noInterceptor 关掉的拦截器 */
   readonly disabled: readonly string[]
 }
@@ -51,6 +53,9 @@ export type JoinedRows<S extends AnySchema, K extends string, Out, Refs extends 
 
 /** 把交叉类型摊平成一个对象类型，提示和比较都更直观 */
 type Flatten<T> = { [P in keyof T]: T[P] }
+
+/** rollup / cube 之后分组键可空 */
+export type NullableKeys<G> = { [P in keyof G]: G[P] extends Expr<infer T> ? Expr<T | null> : G[P] }
 
 export interface Page<T> {
   readonly rows: T[]
@@ -242,6 +247,16 @@ export class Queryable<S extends AnySchema, K extends EntityKey<S>, Out = Row<S[
     return this.with({ forUpdate: true })
   }
 
+  /** 拿不到锁立即报错，不在锁上排队（FOR UPDATE NOWAIT）；在事务里用。SQLite 没有行锁，是空操作 */
+  forUpdateNoWait(): Queryable<S, K, Out, Refs> {
+    return this.with({ forUpdate: true, lockWait: 'nowait' })
+  }
+
+  /** 跳过被别人锁住的行（FOR UPDATE SKIP LOCKED）：多个消费者抢任务，各拿各的。在事务里用 */
+  forUpdateSkipLocked(): Queryable<S, K, Out, Refs> {
+    return this.with({ forUpdate: true, lockWait: 'skip' })
+  }
+
   /** 这条查询不用这些拦截器（按 name，如 'tenant'） */
   noInterceptor(...names: string[]): Queryable<S, K, Out, Refs> {
     return this.with({ disabled: [...this.state.disabled, ...names] })
@@ -334,6 +349,8 @@ export interface Group<S extends AnySchema, K extends EntityKey<S>, G, Refs exte
   /** 不带条件是 COUNT(*)；带条件只数满足的行 */
   count(filter?: (...refs: Refs) => Cond): Expr<number>
   countDistinct(value: (...refs: Refs) => Expr<unknown>): Expr<number>
+  /** rollup / cube 里这一行是不是这个键的小计行：是为 1，否则 0（区分"小计行的 NULL"和"数据本身的 NULL"） */
+  grouping(value: (...refs: Refs) => Expr<unknown>): Expr<number>
   sum<V extends Numeric | null>(value: (...refs: Refs) => Expr<V>): Expr<NonNullable<V> | null>
   avg<V extends Numeric | null>(value: (...refs: Refs) => Expr<V>): Expr<NonNullable<V> | null>
   max<V>(value: (...refs: Refs) => Expr<V>): Expr<NonNullable<V> | null>
@@ -343,6 +360,19 @@ export interface Group<S extends AnySchema, K extends EntityKey<S>, G, Refs exte
 export class GroupedQueryable<S extends AnySchema, K extends EntityKey<S>, G, Out, Refs extends readonly unknown[] = [Ref<S, K>]> extends Executable<Out> {
   protected with(patch: Partial<State>): this {
     return new GroupedQueryable(this.ctx, { ...this.state, ...patch }) as this
+  }
+
+  /**
+   * 逐级小计加总计：按 (a, b) 分组时，除了每个 (a, b) 一行，还有每个 a 的小计行（b 为 NULL）和总计行（a、b 都为 NULL）。
+   * 键在结果里变成可空；用 `g.grouping(...)` 区分"真的是 NULL"还是"小计行"。MySQL 为 WITH ROLLUP，SQLite 不支持。
+   */
+  rollup(): GroupedQueryable<S, K, NullableKeys<G>, Selected<NullableKeys<G>>, Refs> {
+    return new GroupedQueryable(this.ctx, { ...this.state, groupMode: 'rollup' })
+  }
+
+  /** 所有键组合的小计（2 的 n 次方种）。MySQL、SQLite 不支持 */
+  cube(): GroupedQueryable<S, K, NullableKeys<G>, Selected<NullableKeys<G>>, Refs> {
+    return new GroupedQueryable(this.ctx, { ...this.state, groupMode: 'cube' })
   }
 
   having(filter: (g: Group<S, K, G, Refs>) => Cond): GroupedQueryable<S, K, G, Out, Refs> {
@@ -445,7 +475,7 @@ export function recursiveCteEntity(anchor: Query<any>, name: string, all: boolea
 export function newQueryable<S extends AnySchema, K extends EntityKey<S>>(ctx: Context, key: K): Queryable<S, K> {
   return new Queryable(ctx, {
     key, joins: [], where: [], orderBy: [], select: undefined, group: undefined, having: [], groupOrderBy: [], groupSelect: undefined,
-    limit: undefined, offset: undefined, distinct: false, forUpdate: false, disabled: [],
+    limit: undefined, offset: undefined, distinct: false, forUpdate: false, lockWait: undefined, groupMode: undefined, disabled: [],
   })
 }
 
@@ -493,6 +523,7 @@ function build(ctx: Context, state: State, bare = false): Built {
     from: scope.tableRef(entity, root[REF].alias),
     joins: scope.joins, where, groupBy, having, orderBy,
     columns: shape.columns, distinct: state.distinct, limit: state.limit, offset: state.offset, forUpdate: state.forUpdate,
+    lockWait: state.lockWait, groupMode: state.group ? state.groupMode : undefined,
     ctes: scope.ctes.size > 0 ? [...scope.ctes.values()] : undefined,
   }
   return { select, shape }
@@ -545,6 +576,7 @@ function groupHandle(refs: readonly AnyRef[], key: unknown): Group<any, any, unk
       return new Expr<number>({ k: 'agg', fn: 'count', arg: { k: 'case', when: [[n, { k: 'lit', sql: '1' }]], else: undefined }, distinct: false }, codecs.int)
     },
     countDistinct: (value) => aggregate<number>('count', value(...(refs as never[])), codecs.int, true),
+    grouping: (value) => new Expr<number>({ k: 'fn', name: 'grouping', args: [value(...(refs as never[])).node] }, codecs.int),
     sum: agg('sum'),
     avg: agg('avg'),
     max: agg('max'),

@@ -95,7 +95,7 @@ P1（能力对齐）：
 - [x] 7.12 `defineView`：可复用、可嵌套的投影（对应 Java 的 DTO / VO）
 - [ ] 7.13 `Expr` 类型门面：用条件类型交叉让补全只列出适用的方法；date 列改模板字面量类型
 - [x] 7.14 流式读取（`for await`）、`AbortSignal`、`await using` 事务、savepoint 嵌套事务、只读事务
-- [ ] 7.15 方言能力对齐 Java M3b：`rollup / cube / grouping`、`eqNullSafe`、`dateTrunc`、`forUpdateNoWait / SkipLocked`、`INSERT … SELECT`、表名映射、通用 `returning`
+- [x] 7.15 方言能力对齐 Java M3b：`rollup / cube / grouping`、`eqNullSafe`、`dateTrunc`、`forUpdateNoWait / SkipLocked`、`INSERT … SELECT`、表名映射、通用 `returning`
 - [ ] 7.16 代码优先 DDL：schema → `CREATE TABLE`（与 T4 `pull` 互补）；`decimal(p, s)` 的精度要先留在列元数据里
 - [ ] 7.17 JSON 列接 Standard Schema（zod / valibot / arktype）做读写校验
 - [ ] 7.18 写入补全：`returnEntity`、按实体批量更新 / 删除、`save`（带导航的对象图保存）、拦截器 after 钩子

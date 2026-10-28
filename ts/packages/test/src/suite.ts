@@ -17,6 +17,16 @@ export interface LiveSuiteOptions {
   readonly recursiveCte?: boolean
   /** 是否测试只读事务；各库的拒绝写入报错不同，只断言"会失败"。HANA 未验证时可关 */
   readonly readOnlyTransactions?: boolean
+  /** 以下能力默认都测；某个库不支持就传 false */
+  readonly dateTrunc?: boolean
+  readonly rollup?: boolean
+  readonly cube?: boolean
+  /** 行锁（SKIP LOCKED / NOWAIT）要两条连接同时持锁：SQLite 只有一条连接，没有行锁 */
+  readonly rowLocks?: boolean
+  /** CREATE TABLE … AS SELECT（HANA 要加括号，写法不同） */
+  readonly createTableAs?: boolean
+  /** 是否支持 RETURNING（PG、SQLite 支持；MySQL、HANA 不支持，改测"报不支持"） */
+  readonly returning?: boolean
 }
 
 export function liveSuite(name: string, open: () => Promise<TestEnv>, options: LiveSuiteOptions = {}): void {
@@ -507,6 +517,124 @@ export function liveSuite(name: string, open: () => Promise<TestEnv>, options: L
       const owners = await db.queryable(Note).orderBy((n) => n.body).select((n) => ({ body: n.body, owner: n.member.name })).toList()
       assert.deepEqual(owners.map((o) => [o.body, o.owner]), [['a', 'm1'], ['b', 'm1'], ['c', 'm3'], ['d', 'm2']])
       assert.equal(await db.queryable(Member).where((m) => m.notes.any((n) => n.body.eq('c'))).count(), 1)
+    })
+  })
+
+  describe(`${name}: dialect parity (null-safe equality, dateTrunc, row locks, rollup, table mapping)`, () => {
+    it('compares null-safely', async () => {
+      const { db } = await seeded()
+      const names = async (cond: (u: any) => any) => (await db.queryable(User).where(cond).orderBy((u) => u.id).toList()).map((u) => u.name)
+      assert.deepEqual(await names((u) => u.age.eqNullSafe(null)), ['bob'])
+      assert.deepEqual(await names((u) => u.age.eqNullSafe(30)), ['alice'])
+      // 和自己比：连 NULL 也相等；而普通的 eq 碰到 NULL 得不到 bob
+      assert.deepEqual(await names((u) => u.age.eqNullSafe(u.age)), ['alice', 'bob', 'carol'])
+      assert.deepEqual(await names((u) => u.age.eq(u.age)), ['alice', 'carol'])
+    })
+
+    it('truncates dates to a unit', { skip: options.dateTrunc === false }, async () => {
+      const { db } = await seeded()
+      // created_at = 2026-01-02 03:04:05.006（星期五）
+      const row = await db.queryable(User).where((u) => u.name.eq('alice')).select((u) => ({
+        year: u.createdAt.dateTrunc('year'), quarter: u.createdAt.dateTrunc('quarter'), month: u.createdAt.dateTrunc('month'),
+        week: u.createdAt.dateTrunc('week'), day: u.createdAt.dateTrunc('day'), hour: u.createdAt.dateTrunc('hour'),
+        minute: u.createdAt.dateTrunc('minute'), second: u.createdAt.dateTrunc('second'),
+      })).single()
+      const iso = Object.fromEntries(Object.entries(row).map(([k, v]) => [k, v.toISOString()]))
+      assert.deepEqual(iso, {
+        year: '2026-01-01T00:00:00.000Z', quarter: '2026-01-01T00:00:00.000Z', month: '2026-01-01T00:00:00.000Z',
+        week: '2025-12-29T00:00:00.000Z', day: '2026-01-02T00:00:00.000Z', hour: '2026-01-02T03:00:00.000Z',
+        minute: '2026-01-02T03:04:00.000Z', second: '2026-01-02T03:04:05.000Z',
+      })
+      // 按月分组统计
+      const byMonth = await db.queryable(User).groupBy((u) => ({ month: u.createdAt.dateTrunc('month') })).select((g) => ({ month: g.key.month, n: g.count() })).toList()
+      assert.deepEqual(byMonth.map((r) => [r.month.toISOString(), r.n]), [['2026-01-01T00:00:00.000Z', 3]])
+    })
+
+    it('locks rows with NOWAIT and SKIP LOCKED', { skip: options.rowLocks === false }, async () => {
+      const { db } = await seeded()
+      await db.transaction(async (holder) => {
+        await holder.queryable(User).where((u) => u.id.eq(1)).forUpdate().toList()
+        // 按主键加锁只锁这一行（按没有索引的列查，InnoDB 会锁住扫描过的所有行）。另一个事务：跳过被锁的 alice，拿到其余的行
+        const skipped = await db.transaction((other) => other.queryable(User).orderBy((u) => u.id).forUpdateSkipLocked().toList())
+        assert.deepEqual(skipped.map((u) => u.name), ['bob', 'carol'])
+        // NOWAIT 碰到被锁的行立即报错，而不是排队
+        await assert.rejects(() => db.transaction((other) => other.queryable(User).where((u) => u.id.eq(1)).forUpdateNoWait().toList()))
+        // 没被锁的行 NOWAIT 照常拿到
+        const free = await db.transaction((other) => other.queryable(User).where((u) => u.id.eq(2)).forUpdateNoWait().toList())
+        assert.equal(free.length, 1)
+      })
+    })
+
+    it('rolls up subtotals and a grand total', { skip: options.rollup === false }, async () => {
+      const { db } = await seeded()
+      const rows = await db.queryable(Post).groupBy((p) => ({ userId: p.userId })).rollup()
+        .select((g) => ({ userId: g.key.userId, total: g.sum((p) => p.amount), isTotal: g.grouping((p) => p.userId) }))
+        .toList()
+      const sorted = rows.sort((a, b) => (a.userId ?? Infinity) - (b.userId ?? Infinity))
+      assert.deepEqual(sorted.map((r) => [r.userId, Number(r.total), Number(r.isTotal)]), [[1, 2010.5, 0], [2, 4.25, 0], [null, 2014.75, 1]])
+    })
+
+    it('cubes every combination of the keys', { skip: options.cube === false }, async () => {
+      const { db } = await seeded()
+      const rows = await db.queryable(Post).groupBy((p) => ({ userId: p.userId, title: p.title })).cube().select((g) => ({ userId: g.key.userId, title: g.key.title, n: g.count() })).toList()
+      // 4 个明细 + 2 个用户小计 + 4 个标题小计 + 1 个总计
+      assert.equal(rows.length, 11)
+      assert.equal(rows.find((r) => r.userId === null && r.title === null)?.n, 4)
+    })
+
+    it('inserts from a query without the data leaving the database', { skip: options.createTableAs === false }, async () => {
+      const { db } = await seeded()
+      await db.sql.execute`CREATE TABLE ${db.sql.ident('t_post_copy')} AS SELECT * FROM ${db.sql.ident('t_post')} WHERE 1 = 0`
+      try {
+        const copy = db.mapTables({ Post: 't_post_copy' })
+        // 金额大于 5 的两篇（10.50、2000.00）搬到副本表，标题顺手转大写
+        const affected = await copy.insert(Post).fromQuery(
+          db.queryable(Post).where((p) => p.amount.gt('5')).select((p) => ({ id: p.id, userId: p.userId, title: p.title.upper(), amount: p.amount })),
+        ).execute()
+        assert.equal(affected, 2)
+        assert.deepEqual((await copy.queryable(Post).orderBy((p) => p.id).toList()).map((p) => [p.id, p.title]), [[1, 'ORM TIPS'], [2, 'SQL 100%']])
+        assert.equal(await db.queryable(Post).count(), 4)
+        // select 里写了目标表没有的列：报错
+        assert.throws(() => copy.insert(Post).fromQuery(db.queryable(User).select((u) => ({ nope: u.name })) as never).toSQL(), /no column 'nope'/)
+      } finally {
+        await db.sql.execute`DROP TABLE ${db.sql.ident('t_post_copy')}`
+      }
+    })
+
+    it('returns columns of inserted, updated and deleted rows', { skip: options.returning === false }, async () => {
+      const { db } = await seeded()
+      const inserted = await db.insert(Post).values({ userId: 1, title: 'r', amount: '9.00' }).returning('id', 'title').execute()
+      assert.deepEqual(inserted.map((r) => r.title), ['r'])
+      assert.equal(typeof inserted[0]!.id, 'number')
+      const updated = await db.update(Post).set({ title: 'u' }).where((p) => p.id.eq(1)).returning('id', 'title').execute()
+      assert.deepEqual(updated, [{ id: 1, title: 'u' }])
+      const deleted = await db.delete(Post).where((p) => p.id.eq(4)).returning('title').execute()
+      assert.deepEqual(deleted, [{ title: 'hello' }])
+      // 不写列名就是整行，并按列类型解码
+      const whole = await db.update(Post).set({ title: 'w' }).where((p) => p.id.eq(2)).returning().execute()
+      assert.equal(whole[0]!.title, 'w')
+      assert.equal(Number(whole[0]!.amount), 2000)
+    })
+
+    it('reports returning as unsupported where the database has none', { skip: options.returning !== false }, async () => {
+      const { db } = await seeded()
+      assert.throws(() => db.insert(Post).values({ userId: 1, title: 'r', amount: '9.00' }).returning('id').toSQL(), /not supported/)
+    })
+
+    it('replaces tables for a whole query tree with mapTables', { skip: options.createTableAs === false }, async () => {
+      const { db } = await seeded()
+      await db.sql.execute`CREATE TABLE ${db.sql.ident('t_post_old')} AS SELECT * FROM ${db.sql.ident('t_post')} WHERE ${db.sql.ident('id')} <= 2`
+      try {
+        const archive = db.mapTables({ Post: 't_post_old' })
+        // 同一个实体、同样的查询代码，读的是归档表；导航（post.user）、一对多（user.posts）都跟着换
+        assert.equal(await archive.queryable(Post).count(), 2)
+        assert.equal(await db.queryable(Post).count(), 4)
+        assert.deepEqual((await archive.queryable(Post).orderBy((p) => p.id).select((p) => ({ title: p.title, owner: p.user.name })).toList()).map((r) => r.owner), ['alice', 'alice'])
+        assert.deepEqual((await archive.queryable(User).orderBy((u) => u.id).select((u) => ({ name: u.name, posts: u.posts.count() })).toList()).map((r) => r.posts), [2, 0, 0])
+        assert.deepEqual((await archive.queryable(User).where((u) => u.posts.any((p) => p.id.eq(3))).toList()).map((u) => u.name), [])
+      } finally {
+        await db.sql.execute`DROP TABLE ${db.sql.ident('t_post_old')}`
+      }
     })
   })
 

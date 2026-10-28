@@ -1,9 +1,10 @@
 /**
  * 插入、更新、删除。更新与删除没有条件时拒绝执行，要整表操作显式调用 all()；条件全被跳过（例如 `id && u.id.eq(id)` 里 id 为空）同样算没有条件。
  */
-import { checkAliases, type ConflictNode, type Node } from './ast.ts'
+import { checkAliases, type ConflictNode, type Node, type SelectNode } from './ast.ts'
 import { SqlWriter, type Statement } from './dialect.ts'
 import { condNode, Expr, toNode, type Cond } from './expr.ts'
+import type { Built, Query } from './query.ts'
 import { REF, Scope, type Ref } from './ref.ts'
 import type { AnySchema, EntityKey } from './relations.ts'
 import type { Entity, Insert, Row, ValueOf } from './schema.ts'
@@ -21,10 +22,96 @@ export class Insertable<S extends AnySchema, K extends EntityKey<S>> {
     this.key = key
   }
 
+  /** 从一条查询插入（INSERT … SELECT），见 InsertSelect */
+  fromQuery<Out extends Insert<EntityOf<S, K>>>(query: Query<Out>): InsertSelect {
+    return new InsertSelect(this.ctx, this.ctx.schema.entities[this.key]!, query.buildTree())
+  }
+
   /** 一行或多行；多行时列不同的行分成几条语句 */
   values(rows: Insert<EntityOf<S, K>> | readonly Insert<EntityOf<S, K>>[]): InsertValues<S, K> {
     const list = (Array.isArray(rows) ? rows : [rows]) as readonly Record<string, unknown>[]
     return new InsertValues(this.ctx, this.key, list, undefined)
+  }
+}
+
+/**
+ * 带 RETURNING 的语句：执行后返回受影响行里选定的列（已按列类型解码）。
+ * 写法：`insert(X).values(row).returning('id')`、`update(X).set(…).where(…).returning('id', 'name')`；不写列名就是整行。
+ * PG、SQLite 支持；MySQL、HANA 没有 RETURNING，渲染时报不支持。
+ */
+export class Returning<R> {
+  private readonly ctx: Context
+  private readonly entity: Entity
+  private readonly statements: readonly Statement[]
+  private readonly props: readonly string[]
+
+  constructor(ctx: Context, entity: Entity, statements: readonly Statement[], props: readonly string[]) {
+    this.ctx = ctx
+    this.entity = entity
+    this.statements = statements
+    this.props = props
+  }
+
+  toSQL(): Statement[] {
+    const columns = this.props.map((p) => this.entity.columnNames[p]!)
+    const clause = this.ctx.dialect.returningColumns(columns)
+    return this.statements.map((s) => ({ sql: s.sql + clause, params: s.params }))
+  }
+
+  async execute(): Promise<R[]> {
+    const out: R[] = []
+    for (const statement of this.toSQL()) {
+      for (const row of await query(this.ctx, statement)) {
+        out.push(Object.fromEntries(this.props.map((p) => {
+          const raw = row[this.entity.columnNames[p]!]
+          return [p, raw === null || raw === undefined ? null : this.entity.columns[p]!.codec.decode(raw)]
+        })) as R)
+      }
+    }
+    return out
+  }
+}
+
+/** returning 的列名：不写就是整行；写了就只取这些（类型检查只允许实体的列） */
+function returningProps(entity: Entity, columns: readonly string[]): string[] {
+  for (const c of columns) if (!(c in entity.columns)) throw new Error(`${entity.table} has no column '${c}'`)
+  return columns.length > 0 ? [...columns] : Object.keys(entity.columns)
+}
+
+/**
+ * INSERT … SELECT：把一条查询的结果直接插进表里，数据不经过应用。查询的 select 键就是目标列名，
+ * 列的值类型必须和目标列一致，目标列里必填的都要有。**不经过插入拦截器**（租户、默认值、版本等要在 select 里自己给）。
+ * ```ts
+ * await db.insert(PostArchive).fromQuery(db.queryable(Post).where(p => p.createdAt.lt(cutoff)).select(p => ({ id: p.id, userId: p.userId, title: p.title, amount: p.amount }))).execute()
+ * ```
+ */
+export class InsertSelect {
+  private readonly ctx: Context
+  private readonly entity: Entity
+  private readonly built: Built
+
+  constructor(ctx: Context, entity: Entity, built: Built) {
+    this.ctx = ctx
+    this.entity = entity
+    this.built = built
+  }
+
+  toSQL(): Statement {
+    const { select, shape } = this.built
+    if (!shape.flat || shape.named.size === 0) throw new Error('fromQuery needs a select made of plain expressions (or no select, i.e. whole rows)')
+    const keys = [...shape.named.keys()]
+    for (const k of keys) if (!(k in this.entity.columns)) throw new Error(`fromQuery: ${this.entity.table} has no column '${k}'`)
+    // 查询输出列按 select 的键顺序，别名统一成 c0、c1 …，与 INSERT 的列表按位置对应
+    const source: SelectNode = { ...select, columns: keys.map((k, i) => ({ e: select.columns.find((c) => c.as === shape.named.get(k)!.alias)!.e, as: `c${i}` })) }
+    checkAliases(source)
+    const w = new SqlWriter()
+    const sql = this.ctx.dialect.insert({ table: this.entity.table, columns: keys.map((k) => this.entity.columnNames[k]!), rows: [], conflict: undefined, source }, w)
+    return { sql, params: w.params }
+  }
+
+  /** 返回插入的行数 */
+  async execute(): Promise<number> {
+    return (await execute(this.ctx, this.toSQL())).affected
   }
 }
 
@@ -77,6 +164,13 @@ export class InsertValues<S extends AnySchema, K extends EntityKey<S>> {
   private insertedColumns(): string[] {
     const props = Object.keys(this.entity.columns).filter((p) => this.rows.some((r) => r[p] !== undefined))
     return props.map((p) => this.entity.columnNames[p]!)
+  }
+
+  /** 插入后返回这些列（已解码）；见 Returning */
+  returning(): Returning<Row<EntityOf<S, K>>>
+  returning<C extends keyof Row<EntityOf<S, K>> & string>(...columns: C[]): Returning<Pick<Row<EntityOf<S, K>>, C>>
+  returning(...columns: string[]): Returning<unknown> {
+    return new Returning(this.ctx, this.entity, this.toSQL(), returningProps(this.entity, columns))
   }
 
   /** 返回影响的行数 */
@@ -248,6 +342,14 @@ export class Updatable<S extends AnySchema, K extends EntityKey<S>> extends Filt
     return affected
   }
 
+  /** 更新后返回这些列（已解码）；见 Returning */
+  returning(): Returning<Row<EntityOf<S, K>>>
+  returning<C extends keyof Row<EntityOf<S, K>> & string>(...columns: C[]): Returning<Pick<Row<EntityOf<S, K>>, C>>
+  returning(...columns: string[]): Returning<unknown> {
+    const entity = this.ctx.schema.entities[this.key]!
+    return new Returning(this.ctx, entity, [this.toSQL()], returningProps(entity, columns))
+  }
+
   all(): Updatable<S, K> {
     return new Updatable(this.ctx, this.key as K, { ...this.state, all: true }, this.values)
   }
@@ -295,6 +397,14 @@ export class Deletable<S extends AnySchema, K extends EntityKey<S>> extends Filt
 
   all(): Deletable<S, K> {
     return new Deletable(this.ctx, this.key as K, { ...this.state, all: true })
+  }
+
+  /** 删除后返回这些列（已解码）；逻辑删除时返回被标记的行。见 Returning */
+  returning(): Returning<Row<EntityOf<S, K>>>
+  returning<C extends keyof Row<EntityOf<S, K>> & string>(...columns: C[]): Returning<Pick<Row<EntityOf<S, K>>, C>>
+  returning(...columns: string[]): Returning<unknown> {
+    const entity = this.ctx.schema.entities[this.key]!
+    return new Returning(this.ctx, entity, [this.toSQL()], returningProps(entity, columns))
   }
 
   /** 物理删除：绕过逻辑删除（读过滤与改写成 update 都不再生效），已被逻辑删除的行也会被删掉 */

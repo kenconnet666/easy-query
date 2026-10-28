@@ -49,7 +49,7 @@ if (!raw) {
     return { db: createDb({ schema, adapter, log: (s) => statements.push(s) }), statements, adapter }
   }
 
-  liveSuite(`hana ${url.port}`, open, { recursiveCte: false })
+  liveSuite(`hana ${url.port}`, open, { recursiveCte: false, dateTrunc: false, createTableAs: false, returning: false })
 
   describe(`hana ${url.port}: Hana.* functions`, () => {
     it('contains, fuzzy and score', async () => {

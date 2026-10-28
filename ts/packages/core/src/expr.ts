@@ -99,6 +99,23 @@ export class Expr<T> {
     return pred({ k: 'between', e: this.node, lo: this.operand(lo), hi: this.operand(hi) })
   }
 
+  /**
+   * null 安全的相等：两边都是 NULL 也算相等（`=` 遇到 NULL 得到未知）。value 可以是 null。
+   * MySQL `<=>`、PG `IS NOT DISTINCT FROM`、SQLite `IS`，其它库写成 `(a = b OR (a IS NULL AND b IS NULL))`。
+   */
+  eqNullSafe(value: Operand<T> | null): Pred {
+    return pred({ k: 'eq_ns', l: this.node, r: value === null ? { k: 'lit', sql: 'NULL' } : this.operand(value) })
+  }
+
+  /**
+   * 截断到某个时间单位（`createdAt.dateTrunc('month')` 得到当月 1 日 0 点），按月 / 按周 / 按天分组统计时用。
+   * 周从星期一开始（与 PG 一致）。HANA 暂不支持，渲染时报错。
+   */
+  dateTrunc(this: Expr<Temporal | null>, unit: DateUnit): Expr<T> {
+    if (!DATE_UNITS.includes(unit)) throw new RangeError(`dateTrunc unit must be one of ${DATE_UNITS.join(', ')}, got '${unit}'`)
+    return new Expr({ k: 'fn', name: 'date_trunc', args: [this.node, { k: 'lit', sql: `'${unit}'` }] }, this.codec) as Expr<T>
+  }
+
   isNull(): Pred { return pred({ k: 'null', e: this.node, not: false }) }
   isNotNull(): Pred { return pred({ k: 'null', e: this.node, not: true }) }
 
@@ -244,6 +261,10 @@ export class Expr<T> {
 }
 
 export type Pred = Expr<boolean>
+
+/** dateTrunc 的时间单位 */
+export type DateUnit = 'year' | 'quarter' | 'month' | 'week' | 'day' | 'hour' | 'minute' | 'second'
+const DATE_UNITS: readonly DateUnit[] = ['year', 'quarter', 'month', 'week', 'day', 'hour', 'minute', 'second']
 
 /** cast 的目标类型 → 转换后的 JS 类型 */
 export interface CastTypes {

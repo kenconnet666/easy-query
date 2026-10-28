@@ -32,9 +32,13 @@ export class PostgresDialect extends Dialect {
       concat: (a) => `CONCAT(${a.map((x) => `CAST(${x} AS text)`).join(', ')})`,
       // PG 的两参数 ROUND 只接受 numeric，double 列要先转
       round: (a) => `ROUND(CAST(${a[0]} AS NUMERIC), ${a[1]})`,
+      date_trunc: (a) => `DATE_TRUNC(${a[1]}, ${a[0]})`,
       cast_string: (a) => `CAST(${a[0]} AS TEXT)`,
     }
   }
+
+  override readonly nullSafeEquals = 'IS NOT DISTINCT FROM'
+  override readonly supportsReturning = true
 
   /** CASE 分支里的字符串 / 数字 / 布尔参数 PG 推断不出类型（"could not determine data type of parameter"），加显式转换 */
   protected override caseValue(n: Node, w: SqlWriter): string {

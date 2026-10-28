@@ -31,6 +31,15 @@ export class MySqlDialect extends Dialect {
     return super.bindParam(value instanceof Uint8Array && !Buffer.isBuffer(value) ? Buffer.from(value) : value, w)
   }
 
+  /** MySQL 的 `<=>` 就是 null 安全的相等 */
+  override readonly nullSafeEquals = '<=>'
+
+  /** MySQL 只有 WITH ROLLUP（没有 CUBE） */
+  override groupByKeys(keys: string[], mode: 'rollup' | 'cube' | undefined): string {
+    if (mode === 'cube') throw new Error('cube() is not supported by MySQL; use rollup() or group the combinations yourself')
+    return keys.join(', ') + (mode === 'rollup' ? ' WITH ROLLUP' : '')
+  }
+
   /** MySQL.json / MySQL.match 的函数（见 functions.ts） */
   protected override functions(): Record<string, FunctionRenderer> {
     return { ...super.functions(), ...mysqlFunctions }

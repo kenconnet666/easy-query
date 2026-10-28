@@ -19,6 +19,11 @@ export class HanaDialect extends Dialect {
   /** HANA 没有 WITH RECURSIVE（层级查询用 HIERARCHY 函数） */
   override readonly supportsRecursiveCte = false
 
+  /** HANA 跳过被锁行的写法是 IGNORE LOCKED */
+  override forUpdate(wait?: 'nowait' | 'skip'): string {
+    return ' FOR UPDATE' + (wait === 'nowait' ? ' NOWAIT' : wait === 'skip' ? ' IGNORE LOCKED' : '')
+  }
+
   /** HANA 没有 RELEASE SAVEPOINT：回滚到保存点即可，其余在事务结束时一起清掉 */
   override releaseSavepoint(): string | undefined {
     return undefined
