@@ -2,10 +2,10 @@
  * lambda 里拿到的表引用：`u.name` 是列，`u.company` 是多对一导航（第一次访问时加一个 LEFT JOIN），
  * `u.posts` 是一对多导航（any / count / sum 渲染为关联子查询，toList 在结果里拼成数组）。
  */
-import type { Join, Node, OrderNode, SelectNode } from './ast.ts'
+import type { CteNode, Join, Node, OrderNode, SelectNode, TableRef } from './ast.ts'
 import { aggregate, aggregateCodec, codecs, condNode, Expr, orderNodes, pred, type Cond, type Numeric, type OrderItem, type Pred } from './expr.ts'
 import type { AnySchema, EntityKey, Many, One, Relation } from './relations.ts'
-import type { Row, ValueOf } from './schema.ts'
+import type { Entity, Row, ValueOf } from './schema.ts'
 
 export const REF: unique symbol = Symbol('eqts.ref')
 
@@ -40,13 +40,41 @@ export class Scope {
   readonly allowJoins: boolean
   /** 拦截器给每个表引用附加的条件（主表、JOIN、子查询都用） */
   readonly filters: (ref: AnyRef) => Node[]
+  /** 整条语句用到的 CTE（按依赖顺序），父子 Scope 共用同一张表：WITH 只能出现在最外层 */
+  readonly ctes: Map<string, CteNode>
   private readonly counter: { n: number }
 
-  constructor(schema: AnySchema, counter: { n: number } = { n: 0 }, allowJoins = true, filters: (ref: AnyRef) => Node[] = () => []) {
+  constructor(
+    schema: AnySchema,
+    counter: { n: number } = { n: 0 },
+    allowJoins = true,
+    filters: (ref: AnyRef) => Node[] = () => [],
+    ctes: Map<string, CteNode> = new Map(),
+  ) {
     this.schema = schema
     this.counter = counter
     this.allowJoins = allowJoins
     this.filters = filters
+    this.ctes = ctes
+  }
+
+  /** 登记用到的 CTE；它自己依赖的 CTE 先登记，名字相同的只登记一次 */
+  useCte(cte: CteNode): void {
+    for (const inner of cte.q.ctes ?? []) this.useCte(inner)
+    if (!this.ctes.has(cte.name)) this.ctes.set(cte.name, { ...cte, q: { ...cte.q, ctes: undefined } })
+  }
+
+  /**
+   * 实体在 FROM / JOIN 里的写法：普通表就是表名；派生表是 `(子查询) 别名`；CTE 是名字，并把它登记到最外层的 WITH。
+   * 子查询里用到的 CTE 一并上提，WITH 不能嵌在子查询里。
+   */
+  tableRef(entity: Entity, alias: string): TableRef {
+    const d = entity.derived
+    if (!d) return { table: entity.table, alias }
+    for (const inner of d.q.ctes ?? []) this.useCte(inner)
+    if (d.kind === 'subquery') return { table: '', alias, sub: { ...d.q, ctes: undefined } }
+    this.useCte({ name: entity.table, recursive: d.recursive, columns: d.columns, q: d.q })
+    return { table: entity.table, alias }
   }
 
   nextAlias(): string {
@@ -55,6 +83,11 @@ export class Scope {
 
   /** 子查询用的现场：别名不与外层重复 */
   child(): Scope {
+    return new Scope(this.schema, this.counter, true, this.filters, this.ctes)
+  }
+
+  /** 与本现场共用别名计数、但 CTE 单独统计：toList 的第二条查询是独立的语句，只该带它自己用到的 WITH */
+  detached(): Scope {
     return new Scope(this.schema, this.counter, true, this.filters)
   }
 
@@ -90,11 +123,37 @@ function joinOne(scope: Scope, parent: AnyRef, prop: string, rel: One, parentNul
   const target = scope.schema.entities[rel.target]!
   const alias = scope.nextAlias()
   const ref = makeRef(scope, rel.target, alias, parentNullable || rel.nullable)
-  const on: Node = { k: 'op', op: '=', l: { k: 'col', alias, name: target.columnNames[rel.to]! }, r: columnNode(scope, info, rel.from) }
+  // 复合外键：每对列一个等式，用 AND 连起来
+  const on = allOf(rel.to.map((c, i): Node => ({ k: 'op', op: '=', l: { k: 'col', alias, name: target.columnNames[c]! }, r: columnNode(scope, info, rel.from[i]!) })))
   // 拦截器的条件放进 ON：LEFT JOIN 不会因此把主表的行过滤掉
   const extra = scope.filters(ref)
-  scope.joins.push({ table: target.table, alias, on: extra.length === 0 ? on : { k: 'and', items: [on, ...extra] } })
+  scope.joins.push({ ...scope.tableRef(target, alias), on: extra.length === 0 ? on : { k: 'and', items: [on, ...extra] } })
   return ref
+}
+
+/** 多个条件用 AND 连起来；只有一个时原样返回 */
+export function allOf(items: readonly Node[]): Node {
+  return items.length === 1 ? items[0]! : { k: 'and', items }
+}
+
+/**
+ * 一对多 / 多对多里"孩子一侧"用来和父行 from 列比较的列（按位置对应）。
+ * 直连时是目标表的 to 列；多对多时先把中间表 inner join 到目标表上，返回中间表引用父表的那几列。
+ * 导出给 toList 的第二条查询复用，两处的连接方式必须一致。
+ */
+export function linkColumns(scope: Scope, relation: Many, targetRoot: AnyRef): Node[] {
+  const info = targetRoot[REF]
+  const target = scope.schema.entities[relation.target]!
+  const col = (alias: string, entity: { columnNames: Record<string, string> }, prop: string): Node => ({ k: 'col', alias, name: entity.columnNames[prop]! })
+  const through = relation.through
+  if (!through) return relation.to.map((c) => col(info.alias, target, c))
+  const middle = scope.schema.entities[through.entity]!
+  const alias = scope.nextAlias()
+  const on = allOf(through.to.map((c, i): Node => ({ k: 'op', op: '=', l: col(alias, middle, c), r: col(info.alias, target, relation.to[i]!) })))
+  // 拦截器（租户、逻辑删除等）也要作用在中间表上，条件放进 ON
+  const extra = scope.filters(makeRef(scope, through.entity, alias, false))
+  scope.joins.push({ table: middle.table, alias, kind: 'inner', on: extra.length === 0 ? on : { k: 'and', items: [on, ...extra] } })
+  return through.from.map((c) => col(alias, middle, c))
 }
 
 export function columnNode(scope: Scope, info: RefInfo, prop: string): Node {
@@ -191,14 +250,15 @@ export class ManyRef<S extends AnySchema, K extends EntityKey<S>> {
     const target = scope.schema.entities[this.relation.target]!
     const root = scope.root(this.relation.target)
     const alias = root[REF].alias
-    const where: Node[] = [{ k: 'op', op: '=', l: { k: 'col', alias, name: target.columnNames[this.relation.to]! }, r: columnNode(scope, this.parent[REF], this.relation.from) }]
+    const link = linkColumns(scope, this.relation, root)
+    const where: Node[] = [allOf(link.map((l, i): Node => ({ k: 'op', op: '=', l, r: columnNode(scope, this.parent[REF], this.relation.from[i]!) })))]
     where.push(...scope.filters(root))
     for (const f of filter ? [...this.filters, filter] : this.filters) {
       const n = condNode(f(root))
       if (n) where.push(n)
     }
     const cols = columns(root)
-    return { from: { table: target.table, alias }, joins: scope.joins, where, groupBy: [], having: [], orderBy: [], columns: cols, distinct: false, limit: undefined, offset: undefined, forUpdate: false }
+    return { from: scope.tableRef(target, alias), joins: scope.joins, where, groupBy: [], having: [], orderBy: [], columns: cols, distinct: false, limit: undefined, offset: undefined, forUpdate: false }
   }
 
   /** toList 的子查询用：在新语句里重新求值 filters / orders */

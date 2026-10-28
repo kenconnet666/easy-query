@@ -10,7 +10,7 @@
 import pg from 'pg'
 import type { Pool, PoolClient, QueryConfig, QueryResult } from 'pg'
 import { pgFunctions } from './functions.ts'
-import { Dialect, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Node, type Session, type SqlWriter, type TransactionOptions } from '@eqts/core'
+import { Dialect, type ColumnOptions, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Node, type Session, type SqlWriter, type TransactionOptions } from '@zerodep-dev/easy-query-ts'
 
 export { Pg } from './functions.ts'
 
@@ -32,9 +32,23 @@ export class PostgresDialect extends Dialect {
       concat: (a) => `CONCAT(${a.map((x) => `CAST(${x} AS text)`).join(', ')})`,
       // PG 的两参数 ROUND 只接受 numeric，double 列要先转
       round: (a) => `ROUND(CAST(${a[0]} AS NUMERIC), ${a[1]})`,
+      date_trunc: (a) => `DATE_TRUNC(${a[1]}, ${a[0]})`,
       cast_string: (a) => `CAST(${a[0]} AS TEXT)`,
     }
   }
+
+  override columnType(kind: string, o: ColumnOptions): string {
+    if (o.dbType) return o.dbType
+    switch (kind) {
+      case 'decimal': return `NUMERIC(${o.precision ?? 38}, ${o.scale ?? 10})`
+      case 'json': return 'JSONB'
+      case 'bytes': return 'BYTEA'
+      default: return super.columnType(kind, o)
+    }
+  }
+
+  override readonly nullSafeEquals = 'IS NOT DISTINCT FROM'
+  override readonly supportsReturning = true
 
   /** CASE 分支里的字符串 / 数字 / 布尔参数 PG 推断不出类型（"could not determine data type of parameter"），加显式转换 */
   protected override caseValue(n: Node, w: SqlWriter): string {
@@ -59,6 +73,9 @@ const types = {
 
 type Target = Pick<Pool, 'query'> | PoolClient
 
+/** 游标名的序号：同一个事务里可以同时开几个游标 */
+let cursors = 0
+
 function run(target: Target, sql: string, params: readonly unknown[]): Promise<QueryResult> {
   const config: QueryConfig = { text: sql, values: params as unknown[], types }
   return target.query(config)
@@ -66,14 +83,43 @@ function run(target: Target, sql: string, params: readonly unknown[]): Promise<Q
 
 class PostgresSession implements Session {
   protected readonly target: Target
+  /** 连接池（事务里的会话没有）：流式读取时用它借一条连接开临时事务 */
+  protected readonly pool: Pool | undefined
 
-  constructor(target: Target) {
+  constructor(target: Target, pool?: Pool) {
     this.target = target
+    this.pool = pool
   }
 
   async query(sql: string, params: readonly unknown[]): Promise<Record<string, unknown>[]> {
     const result = await run(this.target, sql, params)
     return result.rows as Record<string, unknown>[]
+  }
+
+  /**
+   * 游标流：在事务里 DECLARE 一个游标，再一批批 FETCH。直接用池时借一条连接开临时事务；
+   * 已经在事务里（target 是 PoolClient）就直接在这个事务里声明游标。不需要额外的 pg-cursor 依赖。
+   */
+  async *stream(sql: string, params: readonly unknown[], batchSize: number): AsyncGenerator<Record<string, unknown>[]> {
+    const own = this.pool ? await this.pool.connect() : undefined
+    const client: Target = own ?? this.target
+    const cursor = `eqts_cursor_${(cursors += 1)}`
+    try {
+      if (own) await run(client, 'BEGIN', [])
+      await run(client, `DECLARE ${cursor} NO SCROLL CURSOR FOR ${sql}`, params)
+      for (;;) {
+        const { rows } = await run(client, `FETCH ${batchSize} FROM ${cursor}`, [])
+        if (rows.length > 0) yield rows as Record<string, unknown>[]
+        if (rows.length < batchSize) break
+      }
+    } finally {
+      try {
+        await run(client, `CLOSE ${cursor}`, [])
+        if (own) await run(client, 'COMMIT', [])
+      } finally {
+        own?.release()
+      }
+    }
   }
 
   async execute(sql: string, params: readonly unknown[]): Promise<ExecuteResult> {
@@ -90,17 +136,18 @@ const ISOLATION = {
 } as const
 
 class PostgresDriver extends PostgresSession implements Driver {
-  private readonly pool: Pool
+
+  private readonly source: Pool
 
   constructor(pool: Pool) {
-    super(pool)
-    this.pool = pool
+    super(pool, pool)
+    this.source = pool
   }
 
   async transaction<T>(work: (session: Session) => Promise<T>, options?: TransactionOptions): Promise<T> {
-    const client = await this.pool.connect()
+    const client = await this.source.connect()
     try {
-      await client.query(options?.isolation ? `BEGIN ISOLATION LEVEL ${ISOLATION[options.isolation]}` : 'BEGIN')
+      await client.query(`BEGIN${options?.isolation ? ` ISOLATION LEVEL ${ISOLATION[options.isolation]}` : ''}${options?.readOnly ? ' READ ONLY' : ''}`)
       try {
         const result = await work(new PostgresSession(client))
         await client.query('COMMIT')

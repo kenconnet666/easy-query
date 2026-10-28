@@ -1,19 +1,55 @@
 {
-  "name": "@eqts/hana",
+  "name": "@zerodep-dev/easy-query-ts-hana",
   "version": "0.1.0",
-  "private": true,
-  "type": "module",
+  "description": "SAP HANA adapter (hdb) for @zerodep-dev/easy-query-ts",
+  "license": "Apache-2.0",
+  "author": "lionheart (https://github.com/kenconnet666)",
+  "homepage": "https://github.com/kenconnet666/easy-query/tree/main/ts#readme",
+  "bugs": {
+    "url": "https://github.com/kenconnet666/easy-query/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kenconnet666/easy-query.git",
+    "directory": "ts/packages/hana"
+  },
+  "keywords": [
+    "sap-hana",
+    "hana",
+    "orm",
+    "easy-query"
+  ],
   "exports": {
     ".": "./src/index.ts"
   },
-  "dependencies": {
-    "@eqts/core": "workspace:*"
+  "files": [
+    "dist",
+    "src"
+  ],
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "access": "public"
   },
   "peerDependencies": {
+    "@zerodep-dev/easy-query-ts": "workspace:^",
     "hdb": "^2.30.0"
   },
   "devDependencies": {
-    "@eqts/test": "workspace:*",
+    "@zerodep-dev/easy-query-ts": "workspace:*",
+    "@zerodep-dev/easy-query-ts-test": "workspace:*",
     "hdb": "2.30.1"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "prepack": "tsc -b tsconfig.build.json"
   }
 }

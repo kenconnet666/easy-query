@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, it } from 'node:test'
-import { col, createDb, defineSchema, entity, tenant } from '@eqts/core'
-import { sqlite } from '@eqts/sqlite'
+import { col, createDb, defineSchema, entity, tenant } from '@zerodep-dev/easy-query-ts'
+import { sqlite } from '@zerodep-dev/easy-query-ts-sqlite'
 
 const Order = entity('t_order', { id: col.bigint().primaryKey().generated(), tenantId: col.int(), customerId: col.int() })
 const Customer = entity('t_customer', { id: col.int().primaryKey(), tenantId: col.int(), name: col.string() })

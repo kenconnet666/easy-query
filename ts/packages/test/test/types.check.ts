@@ -1,7 +1,7 @@
 /**
  * 类型层面的检查：只参与 tsc，不运行。正例用 Equal 断言推导出的类型，负例用 @ts-expect-error 固定"必须报错"。
  */
-import { col, createDb, defineSchema, entity, sql, win, type Adapter, type Insert, type Row } from '@eqts/core'
+import { col, createDb, defineSchema, defineView, entity, sql, win, type Adapter, type Insert, type Row, type ViewOf } from '@zerodep-dev/easy-query-ts'
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false
 function expect<T extends true>(): T | void {}
@@ -154,3 +154,51 @@ defineSchema({ Company, User }, {
   // @ts-expect-error 目标实体不存在
   User: (r) => ({ company: r.one('Nope', { from: 'companyId', to: 'id' }) }),
 })
+
+// 列修饰器：品牌类型、枚举、客户端默认值让插入时可省
+type UserId = number & { readonly __brand: 'UserId' }
+const Tagged = entity('t_tagged', {
+  id: col.bigint().primaryKey().generated().$type<UserId>(),
+  kind: col.enum(['a', 'b'] as const),
+  token: col.string().$default(() => 'x'),
+  gone: col.boolean().softDelete(),
+  version: col.int().version(),
+})
+expect<Equal<Row<typeof Tagged>['id'], UserId>>()
+expect<Equal<Row<typeof Tagged>['kind'], 'a' | 'b'>>()
+// token、gone、version 插入时可省；kind 必填
+expect<Equal<keyof Insert<typeof Tagged>, 'id' | 'kind' | 'token' | 'gone' | 'version'>>()
+const taggedDb = createDb({ schema: defineSchema({ Tagged }), adapter })
+taggedDb.insert(Tagged).values({ kind: 'a' })
+// @ts-expect-error 枚举之外的值
+taggedDb.insert(Tagged).values({ kind: 'c' })
+// @ts-expect-error kind 必填
+taggedDb.insert(Tagged).values({})
+
+// 视图：可复用、可嵌套的投影，结果类型自动推导
+const PostCard = defineView(schema, Post, (p) => ({ title: p.title, author: p.user.name }))
+const UserCard = defineView(schema, User, (u) => ({ id: u.id, company: u.company.name, posts: u.posts.toList(PostCard) }))
+async function views() {
+  const rows = await db.queryable(User).select(UserCard).toList()
+  type Card = { id: number; company: string | null; posts: { title: string; author: string }[] }
+  expect<Equal<typeof rows, Card[]>>()
+  expect<Equal<ViewOf<typeof UserCard>, Card>>()
+  // 在别的 select 里展开视图
+  const posts = await db.queryable(Post).select((p) => ({ ...PostCard(p), id: p.id })).toList()
+  expect<Equal<typeof posts, { title: string; author: string; id: number }[]>>()
+}
+void views
+// @ts-expect-error 视图属于 User，不能用在 Post 的查询上
+db.queryable(Post).select(UserCard)
+
+// date 列是 'YYYY-MM-DD' 文字：可以取年月日，普通字符串列不行
+const Person = entity('t_person', { id: col.bigint().primaryKey().generated(), name: col.string(), born: col.date() })
+const personDb = createDb({ schema: defineSchema({ Person }), adapter })
+personDb.queryable(Person).where((p) => [p.born.year().eq(1990), p.born.ge('1990-01-01'), p.born.addDays(1).ge('1990-01-02')])
+expect<Equal<Row<typeof Person>['born'], `${number}-${number}-${number}`>>()
+personDb.queryable(Person).where((p) => [
+  // @ts-expect-error 字符串列不是日期，不能取年份
+  p.name.year().eq(1990),
+  // @ts-expect-error 不是 'YYYY-MM-DD' 形状的字面量
+  p.born.ge('not a date'),
+])

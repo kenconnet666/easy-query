@@ -5,9 +5,9 @@
  * ```
  * 适配器自带一个小连接池（hdb 一个 client 就是一条连接）。自增主键在同一条连接上用 CURRENT_IDENTITY_VALUE() 取回。
  */
-import hdb, { type Client, type ClientOptions } from 'hdb'
+import hdb, { type Client } from 'hdb'
 import { hanaFunctions } from './functions.ts'
-import { Dialect, SqlWriter, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type InsertNode, type Session, type TransactionOptions } from '@eqts/core'
+import { Dialect, SqlWriter, type ColumnOptions, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type InsertNode, type Session, type TransactionOptions } from '@zerodep-dev/easy-query-ts'
 
 export { Hana } from './functions.ts'
 
@@ -16,6 +16,34 @@ const NO_LIMIT = 2147483647
 
 export class HanaDialect extends Dialect {
   readonly name = 'hana'
+  /** HANA 没有 WITH RECURSIVE（层级查询用 HIERARCHY 函数） */
+  override readonly supportsRecursiveCte = false
+
+  override columnType(kind: string, o: ColumnOptions): string {
+    if (o.dbType) return o.dbType
+    switch (kind) {
+      case 'string': return `NVARCHAR(${o.length ?? 255})`
+      case 'double': return 'DOUBLE'
+      case 'datetime': return 'TIMESTAMP'
+      case 'json': return 'NCLOB'
+      default: return super.columnType(kind, o)
+    }
+  }
+
+  /** HANA 建列存表用 CREATE COLUMN TABLE，也没有 IF NOT EXISTS（表已存在会报错） */
+  override createTableStart(): string {
+    return 'CREATE COLUMN TABLE'
+  }
+
+  /** HANA 跳过被锁行的写法是 IGNORE LOCKED */
+  override forUpdate(wait?: 'nowait' | 'skip'): string {
+    return ' FOR UPDATE' + (wait === 'nowait' ? ' NOWAIT' : wait === 'skip' ? ' IGNORE LOCKED' : '')
+  }
+
+  /** HANA 没有 RELEASE SAVEPOINT：回滚到保存点即可，其余在事务结束时一起清掉 */
+  override releaseSavepoint(): string | undefined {
+    return undefined
+  }
 
   protected override functions(): Record<string, FunctionRenderer> {
     return {
@@ -118,7 +146,16 @@ const ISOLATION = {
   serializable: 'SERIALIZABLE',
 } as const
 
-export interface HanaOptions extends ClientOptions {
+/** hdb 连接参数（hdb 自己没有类型，这里声明用到的字段；其余原样传给 hdb） */
+export interface HdbClientOptions {
+  host: string
+  port: number
+  user: string
+  password: string
+  [option: string]: unknown
+}
+
+export interface HanaOptions extends HdbClientOptions {
   /** 连接后 SET SCHEMA */
   schema?: string
   /** 连接池上限，默认 5 */
@@ -187,6 +224,7 @@ class HanaDriver extends HanaSession implements Driver {
     client.setAutoCommit(false)
     try {
       if (options?.isolation) await run(client, `SET TRANSACTION ISOLATION LEVEL ${ISOLATION[options.isolation]}`, [])
+      if (options?.readOnly) await run(client, 'SET TRANSACTION READ ONLY', [])
       try {
         const result = await work(new HanaSession(async () => ({ client, release: () => undefined })))
         await call<void>((cb) => client.commit((error) => cb(error, undefined)))

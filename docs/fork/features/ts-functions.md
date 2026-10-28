@@ -3,7 +3,7 @@
 ## CASE WHEN
 
 ```ts
-import { caseWhen } from '@eqts/core'
+import { caseWhen } from '@zerodep-dev/easy-query-ts'
 
 db.queryable(User).select(u => ({
   name: u.name,

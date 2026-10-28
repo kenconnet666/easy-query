@@ -1,8 +1,51 @@
 {
-  "name": "@eqts/sqlite",
+  "name": "@zerodep-dev/easy-query-ts-sqlite",
   "version": "0.1.0",
-  "private": true,
+  "description": "SQLite adapter (node:sqlite) for @zerodep-dev/easy-query-ts",
+  "license": "Apache-2.0",
+  "author": "lionheart (https://github.com/kenconnet666)",
+  "homepage": "https://github.com/kenconnet666/easy-query/tree/main/ts#readme",
+  "bugs": {
+    "url": "https://github.com/kenconnet666/easy-query/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kenconnet666/easy-query.git",
+    "directory": "ts/packages/sqlite"
+  },
+  "keywords": [
+    "sqlite",
+    "orm",
+    "easy-query"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    },
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "access": "public"
+  },
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": { "@eqts/core": "workspace:*" }
+  "peerDependencies": {
+    "@zerodep-dev/easy-query-ts": "workspace:^"
+  },
+  "devDependencies": {
+    "@zerodep-dev/easy-query-ts": "workspace:*"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "prepack": "tsc -b tsconfig.build.json"
+  }
 }

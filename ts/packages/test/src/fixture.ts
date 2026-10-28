@@ -1,9 +1,9 @@
 /**
  * 各方言共用的测试实体与种子数据。建表语句各方言自己写（类型不同），列名一致。
  */
-import { col, defineSchema, entity, type Adapter, type Db, type Statement } from '@eqts/core'
-import { calendarDate, calendarDateTime, timeOfDay, zonedDateTime } from '@eqts/date'
-import { decimalJs } from '@eqts/decimal'
+import { col, defineSchema, entity, type Adapter, type Db, type Statement } from '@zerodep-dev/easy-query-ts'
+import { calendarDate, calendarDateTime, timeOfDay, zonedDateTime } from '@zerodep-dev/easy-query-ts-date'
+import { decimalJs } from '@zerodep-dev/easy-query-ts-decimal'
 
 export const Company = entity('t_company', {
   id: col.bigint().primaryKey().generated(),
@@ -47,12 +47,76 @@ export const Ext = entity('t_ext', {
   raw: col.bytes(),
 })
 
-export const schema = defineSchema({ Company, User, Post, Comment, Ext }, {
+/** 多对多：角色，经 UserRole 中间表与用户相连 */
+export const Role = entity('t_role', {
+  id: col.bigint().primaryKey().generated(),
+  name: col.string(),
+})
+
+export const UserRole = entity('t_user_role', {
+  userId: col.bigint().primaryKey(),
+  roleId: col.bigint().primaryKey(),
+})
+
+/** 复合外键：成员以 (tenantId, id) 为主键，笔记按这一对列引用成员——只比较 id 会把别的租户的成员当成同一个人 */
+export const Member = entity('t_member', {
+  tenantId: col.int().primaryKey(),
+  id: col.int().primaryKey(),
+  name: col.string(),
+})
+
+export const Note = entity('t_note', {
+  id: col.bigint().primaryKey().generated(),
+  tenantId: col.int(),
+  memberId: col.int(),
+  body: col.string(),
+})
+
+/** 凯撒位移 13：确定性的"加密"，测试透明加解密用 */
+export const rot13 = {
+  encrypt: (v: string): string => v.replace(/[a-z]/gi, (c) => {
+    const base = c <= 'Z' ? 65 : 97
+    return String.fromCharCode(((c.charCodeAt(0) - base + 13) % 26) + base)
+  }),
+  decrypt: (v: string): string => rot13.encrypt(v),
+}
+
+/** 用到全部列修饰器的实体：逻辑删除、乐观锁、客户端默认值、更新时填值、只插入、枚举、透明加密 */
+export const Doc = entity('t_doc', {
+  id: col.bigint().primaryKey().generated(),
+  title: col.string(),
+  status: col.enum(['draft', 'published'] as const).defaulted(),
+  deleted: col.boolean().softDelete(),
+  version: col.int().version(),
+  createdBy: col.string().insertOnly(),
+  token: col.string().$default(() => 'tok'),
+  updatedAt: col.datetime().nullable().$onUpdate(() => new Date('2026-05-06T07:08:09.000Z')),
+  secret: col.string().encrypted(rot13),
+})
+
+/** 建表（代码优先）用的实体：各种类型、自增主键、唯一约束、库里的默认值。不在 schema 里，只在建表测试里用 */
+export const Gadget = entity('t_gadget', {
+  id: col.bigint().primaryKey().generated(),
+  name: col.string(50).unique(),
+  price: col.decimal(10, 2),
+  qty: col.int().dbDefault('0'),
+  active: col.boolean(),
+  born: col.date().nullable(),
+  seenAt: col.datetime(),
+  tags: col.json<string[]>(),
+  photo: col.bytes().nullable(),
+})
+
+export const schema = defineSchema({ Company, User, Post, Comment, Ext, Role, UserRole, Member, Note, Doc }, {
   Company: (r) => ({ users: r.many('User', { from: 'id', to: 'companyId' }) }),
   User: (r) => ({
     company: r.one('Company', { from: 'companyId', to: 'id' }),
     posts: r.many('Post', { from: 'id', to: 'userId' }),
+    roles: r.manyToMany('Role', { through: 'UserRole', throughFrom: 'userId', throughTo: 'roleId' }),
   }),
+  Role: (r) => ({ users: r.manyToMany('User', { through: 'UserRole', throughFrom: 'roleId', throughTo: 'userId' }) }),
+  Member: (r) => ({ notes: r.many('Note', { from: ['tenantId', 'id'], to: ['tenantId', 'memberId'] }) }),
+  Note: (r) => ({ member: r.one('Member', { from: ['tenantId', 'memberId'], to: ['tenantId', 'id'] }) }),
   Post: (r) => ({
     user: r.one('User', { from: 'userId', to: 'id' }),
     comments: r.many('Comment', { from: 'id', to: 'postId' }),

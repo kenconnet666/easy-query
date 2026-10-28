@@ -6,7 +6,7 @@
  * 生成的是带 {@code mysql.} 前缀的函数节点，只有 MySQL 方言的函数表认得；用在别的方言上 toSQL 时报
  * "function 'mysql.json_contains' is not supported by the postgres dialect"。
  */
-import { codecs, dialectFn, type Expr, type FunctionRenderer, type Pred } from '@eqts/core'
+import { codecs, dialectFn, type Expr, type FunctionRenderer, type Pred } from '@zerodep-dev/easy-query-ts'
 
 const fn = (name: string, args: unknown[]): Pred => dialectFn<boolean>(name, args, codecs.boolean)
 
@@ -45,8 +45,28 @@ function nonEmpty<T>(items: T[]): T[] {
   return items
 }
 
+/** dateTrunc 的单位：args[1] 是带引号的单位字面量，如 'month' */
+const unitOf = (a: string): string => a.replace(/'/g, '')
+
+/** MySQL 没有 DATE_TRUNC：用 DATE_FORMAT 取整再转回 DATETIME（8.0.18 可用） */
+function dateTrunc(a: string[]): string {
+  const x = a[0]
+  switch (unitOf(a[1]!)) {
+    case 'year': return `CAST(DATE_FORMAT(${x}, '%Y-01-01') AS DATETIME)`
+    case 'quarter': return `CAST(CONCAT(YEAR(${x}), '-', LPAD(QUARTER(${x}) * 3 - 2, 2, '0'), '-01') AS DATETIME)`
+    case 'month': return `CAST(DATE_FORMAT(${x}, '%Y-%m-01') AS DATETIME)`
+    // WEEKDAY：星期一是 0，所以减去它就回到本周一
+    case 'week': return `CAST(DATE(DATE_SUB(${x}, INTERVAL WEEKDAY(${x}) DAY)) AS DATETIME)`
+    case 'day': return `CAST(DATE(${x}) AS DATETIME)`
+    case 'hour': return `CAST(DATE_FORMAT(${x}, '%Y-%m-%d %H:00:00') AS DATETIME)`
+    case 'minute': return `CAST(DATE_FORMAT(${x}, '%Y-%m-%d %H:%i:00') AS DATETIME)`
+    default: return `CAST(DATE_FORMAT(${x}, '%Y-%m-%d %H:%i:%s') AS DATETIME)`
+  }
+}
+
 /** 加进 MySQL 方言的函数表 */
 export const mysqlFunctions: Record<string, FunctionRenderer> = {
+  date_trunc: dateTrunc,
   // 通用函数里与标准写法不同的部分
   add_days: (a) => `DATE_ADD(${a[0]}, INTERVAL ${a[1]} DAY)`,
   add_months: (a) => `DATE_ADD(${a[0]}, INTERVAL ${a[1]} MONTH)`,

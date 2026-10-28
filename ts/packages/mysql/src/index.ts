@@ -8,7 +8,7 @@
  * TIMESTAMP 列会按会话时区换算，建议连接池设 `timezone: 'Z'` 并让会话时区为 +00:00。
  */
 import type { Pool, PoolConnection, ResultSetHeader } from 'mysql2/promise'
-import { Dialect, type Adapter, type ConflictNode, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type SqlWriter, type TransactionOptions } from '@eqts/core'
+import { Dialect, type ColumnOptions, type Adapter, type ConflictNode, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type SqlWriter, type TransactionOptions } from '@zerodep-dev/easy-query-ts'
 import { mysqlFunctions } from './functions.ts'
 
 export { MySQL } from './functions.ts'
@@ -29,6 +29,30 @@ export class MySqlDialect extends Dialect {
   override bindParam(value: unknown, w: SqlWriter): string {
     if (typeof value === 'bigint') return value.toString()
     return super.bindParam(value instanceof Uint8Array && !Buffer.isBuffer(value) ? Buffer.from(value) : value, w)
+  }
+
+  override columnType(kind: string, o: ColumnOptions): string {
+    if (o.dbType) return o.dbType
+    switch (kind) {
+      case 'int': return 'INT'
+      case 'double': return 'DOUBLE'
+      case 'datetime': return 'DATETIME(3)'
+      case 'json': return 'JSON'
+      default: return super.columnType(kind, o)
+    }
+  }
+
+  override identity(): string {
+    return 'AUTO_INCREMENT'
+  }
+
+  /** MySQL 的 `<=>` 就是 null 安全的相等 */
+  override readonly nullSafeEquals = '<=>'
+
+  /** MySQL 只有 WITH ROLLUP（没有 CUBE） */
+  override groupByKeys(keys: string[], mode: 'rollup' | 'cube' | undefined): string {
+    if (mode === 'cube') throw new Error('cube() is not supported by MySQL; use rollup() or group the combinations yourself')
+    return keys.join(', ') + (mode === 'rollup' ? ' WITH ROLLUP' : '')
   }
 
   /** MySQL.json / MySQL.match 的函数（见 functions.ts） */
@@ -71,16 +95,69 @@ function typeCast(field: { type: string; string(): string | null }, next: () => 
 
 type Queryable = Pick<Pool, 'query'> | PoolConnection
 
+/** mysql2 底层的回调式 API：流式读取只在这一层有（promise 包装没有暴露 stream） */
+interface CoreQueryable {
+  query(options: object): { stream(options: object): AsyncIterable<unknown> & { destroy(): void } }
+}
+
+/** 底层的连接：流式读取自己借一条，读完 release，中途放弃就 destroy（连接关掉，服务端随之终止查询） */
+interface CoreConnection extends CoreQueryable {
+  release(): void
+  destroy(): void
+}
+
+/** 底层的连接池（只有池级的会话有 getConnection，事务里的会话没有） */
+interface CorePool extends CoreQueryable {
+  getConnection(callback: (error: Error | null, connection: CoreConnection) => void): void
+}
+
 class MySqlSession implements Session {
   protected readonly target: Queryable
+  private readonly core: CoreQueryable
 
-  constructor(target: Queryable) {
+  constructor(target: Queryable, core: CoreQueryable) {
     this.target = target
+    this.core = core
   }
 
   async query(sql: string, params: readonly unknown[]): Promise<Record<string, unknown>[]> {
     const [rows] = await this.target.query({ sql, values: params, typeCast })
     return rows as Record<string, unknown>[]
+  }
+
+  /**
+   * mysql2 的结果流（底层回调 API 的 query().stream()）：边收边产出，不攒整个结果集。
+   * 池级：借一条专用连接，读完归还；调用方中途放弃就销毁这条连接，别的查询不受影响。
+   * 事务里：连接不能销毁，中途放弃时把剩下的行读掉丢弃，保证事务还能继续用。
+   */
+  async *stream(sql: string, params: readonly unknown[], batchSize: number): AsyncGenerator<Record<string, unknown>[]> {
+    const pool = this.core as Partial<CorePool>
+    const own = pool.getConnection ? await new Promise<CoreConnection>((resolve, reject) => pool.getConnection!((error, connection) => (error ? reject(error) : resolve(connection)))) : undefined
+    const rows = (own ?? this.core).query({ sql, values: params as unknown[], typeCast }).stream({ highWaterMark: batchSize })
+    // 手动迭代而不是 for await：for await 提前退出会销毁流，事务里就没法把剩下的读掉了
+    const iterator = rows[Symbol.asyncIterator]()
+    let finished = false
+    try {
+      let batch: Record<string, unknown>[] = []
+      for (;;) {
+        const next = await iterator.next()
+        if (next.done) break
+        batch.push(next.value as Record<string, unknown>)
+        if (batch.length >= batchSize) {
+          yield batch
+          batch = []
+        }
+      }
+      if (batch.length > 0) yield batch
+      finished = true
+    } finally {
+      if (own) {
+        if (finished) own.release()
+        else own.destroy()
+      } else if (!finished) {
+        while (!(await iterator.next()).done) { /* 丢弃剩余的行 */ }
+      }
+    }
   }
 
   async execute(sql: string, params: readonly unknown[]): Promise<ExecuteResult> {
@@ -100,7 +177,7 @@ class MySqlDriver extends MySqlSession implements Driver {
   private readonly pool: Pool
 
   constructor(pool: Pool) {
-    super(pool)
+    super(pool, (pool as unknown as { pool: CoreQueryable }).pool)
     this.pool = pool
   }
 
@@ -109,9 +186,9 @@ class MySqlDriver extends MySqlSession implements Driver {
     try {
       // SET TRANSACTION 只作用于下一个事务，不改连接的默认隔离级别
       if (options?.isolation) await connection.query(`SET TRANSACTION ISOLATION LEVEL ${ISOLATION[options.isolation]}`)
-      await connection.beginTransaction()
+      await connection.query(options?.readOnly ? 'START TRANSACTION READ ONLY' : 'START TRANSACTION')
       try {
-        const result = await work(new MySqlSession(connection))
+        const result = await work(new MySqlSession(connection, (connection as unknown as { connection: CoreQueryable }).connection))
         await connection.commit()
         return result
       } catch (error) {

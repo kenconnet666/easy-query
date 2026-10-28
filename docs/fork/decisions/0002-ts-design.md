@@ -7,14 +7,14 @@
 - 用法与 easy-query 相似：实体 + 导航、lambda 里写条件、隐式 join、隐式子查询（any/none/count/sum）、include、对象树结果。
 - 发挥 TS 的长处：结果类型全自动推导（不用写 DTO 类）、条件可以是数组里的短路表达式、标签模板写原生 SQL 片段。
 - **不做**：与 Java 版逐字相同的 SQL；实体追踪 / 工作单元；浏览器运行时；代码生成作为类型来源（`pull` 只是从现有库生成 schema 文件的可选工具，放 T4）。
-- 位置：本仓库 `ts/`（pnpm workspace），包名暂用 `@eqts/*`（发布前再定）。Node 24+、ESM、TypeScript 最新稳定版。
+- 位置：本仓库 `ts/`（pnpm workspace），包名暂用 `@zerodep-dev/easy-query-ts*`（发布前再定）。Node 24+、ESM、TypeScript 最新稳定版。
 
 ## 1. 定义实体与关系
 
 列与关系分开写。关系里 A 引用 B、B 又引用 A 时，写在同一个初始化表达式里会触发 TS 的"在自身初始化中被引用"循环推导错误（Drizzle 也因此把 relations 单独定义）。
 
 ```ts
-import { entity, col, defineSchema } from '@eqts/core'
+import { entity, col, defineSchema } from '@zerodep-dev/easy-query-ts'
 
 export const Company = entity('t_company', {
   id: col.bigint().primaryKey().generated(),
@@ -64,8 +64,8 @@ export type UserRow = Row<typeof User>    // { id: number; name: string; age: nu
 ## 2. 创建 db
 
 ```ts
-import { createDb } from '@eqts/core'
-import { mysql } from '@eqts/mysql'          // 方言 + 驱动适配（mysql2 是可选 peer 依赖）
+import { createDb } from '@zerodep-dev/easy-query-ts'
+import { mysql } from '@zerodep-dev/easy-query-ts-mysql'          // 方言 + 驱动适配（mysql2 是可选 peer 依赖）
 
 const db = createDb({
   schema,
@@ -146,9 +146,9 @@ await db.transaction(async tx => {
 ## 6. 方言专属与原生 SQL
 
 ```ts
-import { MySQL } from '@eqts/mysql'
-import { Hana } from '@eqts/hana'
-import { Pg } from '@eqts/pg'
+import { MySQL } from '@zerodep-dev/easy-query-ts-mysql'
+import { Hana } from '@zerodep-dev/easy-query-ts-hana'
+import { Pg } from '@zerodep-dev/easy-query-ts-pg'
 
 db.queryable(User).where(u => MySQL.json(u.attrs).contains('"vip"', '$.tags'))
 db.queryable(Doc).where(d => Hana.text(d.body).fuzzy('easy query', 0.8))
@@ -171,7 +171,7 @@ ts/
   packages/mysql     mysql2；8.0.18 基线（PolarDB）
   packages/pg        pg
   packages/hana      hdb（SAP 的纯 JS 驱动；原计划的 @sap/hana-client 是原生扩展，Node 新版本常缺预编译包）
-  packages/test      @eqts/test 独立测试模块：共用夹具、跨方言套件（SQLite / MySQL / PG / HANA）、类型检查
+  packages/test      @zerodep-dev/easy-query-ts-test 独立测试模块：共用夹具、跨方言套件（SQLite / MySQL / PG / HANA）、类型检查
   packages/decimal   decimal.js 列（peer 依赖）
   packages/date      @internationalized/date 列（peer 依赖）
 ```
@@ -182,7 +182,7 @@ ts/
   TypeScript 7.0.2：Check time 0.15s、Instantiations 7.9 万、无 `TS2589`、无循环推导错误。
 - `packages/test/test/types.check.ts`：结果类型的正例（Equal 断言）与负例（`@ts-expect-error`）：用错列类型比较、对数字列调用 like、不存在的列、一对多导航直接取列、
   实体不在 schema 里、insert 缺必填列或类型不对、set 类型不对、关系的 from 列或目标实体写错。
-- 已知的类型精度边界：`date` 列是文字，所以 `year()` 也允许在字符串列上调用。
+- 类型精度：`date` 列现在是 `DateText`（模板字面量类型），字符串列不能再调用 `year()` 等（M7.13 已改）。
 
 ## 实现时的调整（相对草案）
 
@@ -193,4 +193,4 @@ ts/
 5. toList 的过滤条件里不能引用外层查询的导航（第二条查询里没有外层表），渲染前 `checkAliases` 会报出清楚的错误。
 6. Node 直接运行 `.ts`（类型擦除），所以源码只用可擦除语法（`erasableSyntaxOnly`）：不用参数属性、enum、namespace。
 
-草案里待确认的 5 点（列与关系分开定义；条件用数组 + 短路；bigint→number 超范围报错、decimal→string、date→string、datetime→Date；事务用显式 `tx`；包名 `@eqts/*` 暂定）按原方案实施：用户审阅草案后未提异议，要求开始无人值守执行。有异议时改动集中在 schema.ts / relations.ts。
+草案里待确认的 5 点（列与关系分开定义；条件用数组 + 短路；bigint→number 超范围报错、decimal→string、date→string、datetime→Date；事务用显式 `tx`；包名 `@zerodep-dev/easy-query-ts*` 暂定）按原方案实施：用户审阅草案后未提异议，要求开始无人值守执行。有异议时改动集中在 schema.ts / relations.ts。

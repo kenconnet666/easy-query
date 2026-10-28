@@ -1,4 +1,4 @@
-# @eqts/test：TS 版的独立测试模块
+# @zerodep-dev/easy-query-ts-test：TS 版的独立测试模块
 
 所有跨方言共用的测试资产都在这里；方言包（mysql / pg / hana）只保留依赖各自驱动的实库测试，并从这里取夹具与共用套件。
 

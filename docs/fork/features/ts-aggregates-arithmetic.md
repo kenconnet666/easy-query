@@ -21,7 +21,7 @@ const buyers = await db.queryable(Post).countDistinct(p => p.userId)            
 | `col.int()` / `col.double()` | `number` | `number`、同类型表达式 |
 | `col.bigint({ mode: 'bigint' })` | `bigint` | `bigint`、表达式（不混入 number，免得把浮点数带进 64 位运算） |
 | `col.decimal()` | 数值文字 `` `${number}` `` | 数值文字、`number`、表达式 |
-| `decimalJs()`（@eqts/decimal） | `Decimal` | `Decimal`、`number`、表达式 |
+| `decimalJs()`（@zerodep-dev/easy-query-ts-decimal） | `Decimal` | `Decimal`、`number`、表达式 |
 
 decimal 列的 JS 类型是 `` `${number}` `` 而不是 `string`：`'10.50'` 这样的字面量可以直接写入，普通字符串列不会误用算术。需要表示"来自变量的数值文字"时用 `as const` 或 `` `${n}` ``。
 

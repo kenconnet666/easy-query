@@ -1,5 +1,5 @@
 // 由 tools/gen-stress.ts 生成，勿手改。T0：50 个实体、互相引用的关系、5 层导航，tsc 不报实例化过深。
-import { col, createDb, defineSchema, entity, type Adapter } from '@eqts/core'
+import { col, createDb, defineSchema, entity, type Adapter } from '@zerodep-dev/easy-query-ts'
 
 const E0 = entity('t_e0', { id: col.bigint().primaryKey().generated(), name: col.string(), nextId: col.bigint(), prevId: col.bigint().nullable(), score: col.decimal(10, 2), at: col.datetime() })
 const E1 = entity('t_e1', { id: col.bigint().primaryKey().generated(), name: col.string(), nextId: col.bigint(), prevId: col.bigint().nullable(), score: col.decimal(10, 2), at: col.datetime() })

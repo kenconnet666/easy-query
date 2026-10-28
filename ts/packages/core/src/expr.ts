@@ -2,8 +2,8 @@
  * 带类型的表达式。`u.name` 是 `Expr<string>`，`u.age` 是 `Expr<number | null>`；条件是 `Expr<boolean>`，可以存进变量、放进数组。
  * 只适用于某些类型的方法用 `this` 参数限定（例如 like 只能在字符串上调用），用错在编译期报错。
  */
-import type { AggregateFn, BinaryOp, Node, OrderNode } from './ast.ts'
-import { col, type Codec, type DecimalText } from './schema.ts'
+import type { AggregateFn, BinaryOp, Node, OrderNode, SelectNode } from './ast.ts'
+import { col, type Codec, type DateText, type DecimalText } from './schema.ts'
 
 export const codecs = {
   int: col.int().codec,
@@ -12,26 +12,42 @@ export const codecs = {
   string: col.string().codec,
 }
 
-/** 与 T 比较时右边可以写的值：值本身或同类型的表达式；可空的表达式也行（join 条件里 `c.id.eq(u.companyId)`，NULL 不会等于任何值） */
-export type Operand<T> = NonNullable<T> | Expr<NonNullable<T>> | Expr<T> | Expr<NonNullable<T> | null>
+/** 子查询的标记：Queryable 实现它，in(...) 和与标量比较时通过它取出子查询的语法树 */
+export const SUBQUERY: unique symbol = Symbol('eqts.subquery')
 
 /**
- * 第三方数值类型的登记处。@eqts/decimal 之类的扩展包用声明合并把自己的类型加进来，
+ * 能当子查询用的东西（一条 Queryable）。T 是它每行产生的值的类型：`select(p => p.userId)` 是 number。
+ * 子查询是独立的语句，不能引用外层的表（相关子查询请用一对多导航的 any / count / sum）。
+ */
+export interface Subquery<T> {
+  readonly __row: T
+  [SUBQUERY](): SelectNode
+}
+
+export function isSubquery(value: unknown): value is Subquery<unknown> {
+  return typeof value === 'object' && value !== null && SUBQUERY in value
+}
+
+/** 与 T 比较时右边可以写的值：值本身或同类型的表达式；可空的表达式也行（join 条件里 `c.id.eq(u.companyId)`，NULL 不会等于任何值） */
+export type Operand<T> = NonNullable<T> | Expr<NonNullable<T>> | Expr<T> | Expr<NonNullable<T> | null> | Subquery<NonNullable<T>> | Subquery<NonNullable<T> | null>
+
+/**
+ * 第三方数值类型的登记处。@zerodep-dev/easy-query-ts-decimal 之类的扩展包用声明合并把自己的类型加进来，
  * 之后算术、sum / avg、窗口函数就自动认这个类型，核心不依赖任何第三方库：
  * ```ts
- * declare module '@eqts/core' { interface NumericExtensions { decimalJs: Decimal } }
+ * declare module '@zerodep-dev/easy-query-ts' { interface NumericExtensions { decimalJs: Decimal } }
  * ```
  */
 export interface NumericExtensions {}
 
-/** 第三方日期时间类型的登记处，用法同 NumericExtensions（@eqts/date 登记 CalendarDate 等） */
+/** 第三方日期时间类型的登记处，用法同 NumericExtensions（@zerodep-dev/easy-query-ts-date 登记 CalendarDate 等） */
 export interface TemporalExtensions {}
 
 /** 可以做算术与 sum / avg 的值类型 */
 export type Numeric = number | bigint | DecimalText | NumericExtensions[keyof NumericExtensions]
 
-/** 可以取年 / 月 / 日的值类型（string 是 date 列的 'YYYY-MM-DD'，精确区分留给后续的 Expr 类型门面） */
-export type Temporal = Date | string | TemporalExtensions[keyof TemporalExtensions]
+/** 可以取年 / 月 / 日、加减天数、截断的值类型：Date、date 列的 'YYYY-MM-DD'（DateText）、以及扩展包登记的日期时间类型 */
+export type Temporal = Date | DateText | TemporalExtensions[keyof TemporalExtensions]
 
 /**
  * 算术右操作数：与左边同类型的值或表达式。
@@ -61,18 +77,43 @@ export class Expr<T> {
   lt(value: Operand<T>): Pred { return this.op('<', value) }
   le(value: Operand<T>): Pred { return this.op('<=', value) }
 
-  /** 空数组时恒为假 */
-  in(values: readonly NonNullable<T>[]): Pred {
-    return pred({ k: 'in', e: this.node, list: values.map((v) => this.operand(v)), not: false })
+  /**
+   * 在这些值里，或在子查询的结果里：`u.id.in(db.queryable(Post).select(p => p.userId))`。
+   * 值列表为空数组时恒为假；子查询必须只选一列。
+   */
+  in(values: readonly NonNullable<T>[] | Subquery<NonNullable<T>> | Subquery<NonNullable<T> | null>): Pred {
+    return this.inNode(values, false)
   }
 
-  /** 空数组时恒为真 */
-  notIn(values: readonly NonNullable<T>[]): Pred {
-    return pred({ k: 'in', e: this.node, list: values.map((v) => this.operand(v)), not: true })
+  /** 不在这些值里 / 子查询的结果里。值列表为空数组时恒为真（子查询里有 NULL 时按 SQL 的 NOT IN 规则，结果为未知） */
+  notIn(values: readonly NonNullable<T>[] | Subquery<NonNullable<T>> | Subquery<NonNullable<T> | null>): Pred {
+    return this.inNode(values, true)
+  }
+
+  private inNode(values: readonly unknown[] | Subquery<unknown>, not: boolean): Pred {
+    if (isSubquery(values)) return pred({ k: 'in_sub', e: this.node, q: values[SUBQUERY](), not })
+    return pred({ k: 'in', e: this.node, list: (values as readonly unknown[]).map((v) => this.operand(v)), not })
   }
 
   between(lo: Operand<T>, hi: Operand<T>): Pred {
     return pred({ k: 'between', e: this.node, lo: this.operand(lo), hi: this.operand(hi) })
+  }
+
+  /**
+   * null 安全的相等：两边都是 NULL 也算相等（`=` 遇到 NULL 得到未知）。value 可以是 null。
+   * MySQL `<=>`、PG `IS NOT DISTINCT FROM`、SQLite `IS`，其它库写成 `(a = b OR (a IS NULL AND b IS NULL))`。
+   */
+  eqNullSafe(value: Operand<T> | null): Pred {
+    return pred({ k: 'eq_ns', l: this.node, r: value === null ? { k: 'lit', sql: 'NULL' } : this.operand(value) })
+  }
+
+  /**
+   * 截断到某个时间单位（`createdAt.dateTrunc('month')` 得到当月 1 日 0 点），按月 / 按周 / 按天分组统计时用。
+   * 周从星期一开始（与 PG 一致）。HANA 暂不支持，渲染时报错。
+   */
+  dateTrunc(this: Expr<Temporal | null>, unit: DateUnit): Expr<T> {
+    if (!DATE_UNITS.includes(unit)) throw new RangeError(`dateTrunc unit must be one of ${DATE_UNITS.join(', ')}, got '${unit}'`)
+    return new Expr({ k: 'fn', name: 'date_trunc', args: [this.node, { k: 'lit', sql: `'${unit}'` }] }, this.codec) as Expr<T>
   }
 
   isNull(): Pred { return pred({ k: 'null', e: this.node, not: false }) }
@@ -221,6 +262,10 @@ export class Expr<T> {
 
 export type Pred = Expr<boolean>
 
+/** dateTrunc 的时间单位 */
+export type DateUnit = 'year' | 'quarter' | 'month' | 'week' | 'day' | 'hour' | 'minute' | 'second'
+const DATE_UNITS: readonly DateUnit[] = ['year', 'quarter', 'month', 'week', 'day', 'hour', 'minute', 'second']
+
 /** cast 的目标类型 → 转换后的 JS 类型 */
 export interface CastTypes {
   string: string
@@ -228,7 +273,7 @@ export interface CastTypes {
   bigint: number
   double: number
   decimal: DecimalText
-  date: string
+  date: DateText
   datetime: Date
 }
 
@@ -355,6 +400,8 @@ export function orderNodes(items: OrderItem | readonly OrderItem[]): OrderNode[]
 
 export function toNode(value: unknown, codec: Codec<any> | undefined): Node {
   if (value instanceof Expr) return value.node
+  // 子查询当标量用：`(SELECT …)`，要求它只返回一行一列
+  if (isSubquery(value)) return { k: 'sub', q: value[SUBQUERY]() }
   return { k: 'param', value, codec }
 }
 

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import type { Pool } from 'mysql2/promise'
-import { createDb, Dialect, type Driver } from '@eqts/core'
-import { schema, User } from '@eqts/test/fixture'
+import { col, createDb, Dialect, entity, type Driver } from '@zerodep-dev/easy-query-ts'
+import { Gadget, schema, User } from '@zerodep-dev/easy-query-ts-test/fixture'
 import { MySQL, mysql } from '../src/index.ts'
 
 describe('mysql: SQL text', () => {
@@ -35,5 +35,20 @@ describe('mysql: SQL text', () => {
     class Plain extends Dialect { readonly name = 'plain' }
     const other = createDb({ schema, adapter: { dialect: new Plain(), driver: {} as Driver } })
     assert.throws(() => other.queryable(User).where((u) => MySQL.json(u.attrs).contains('1')).toSQL(), /mysql.json_contains' is not supported by the plain dialect/)
+  })
+})
+
+describe('mysql: code-first DDL', () => {
+  const db = createDb({ schema, adapter: mysql({ query: async () => [[]] } as unknown as Pool) })
+
+  it('renders CREATE TABLE with MySQL types and AUTO_INCREMENT', () => {
+    assert.equal(db.createTableSql(Gadget), 'CREATE TABLE IF NOT EXISTS `t_gadget` (`id` BIGINT AUTO_INCREMENT NOT NULL, `name` VARCHAR(50) NOT NULL, `price` DECIMAL(10, 2) NOT NULL,'
+      + ' `qty` INT NOT NULL DEFAULT 0, `active` BOOLEAN NOT NULL, `born` DATE, `seen_at` DATETIME(3) NOT NULL, `tags` JSON NOT NULL, `photo` BLOB, PRIMARY KEY (`id`), UNIQUE (`name`))')
+  })
+
+  it('asks for an explicit dbType when the kind has no database type', () => {
+    const Odd = entity('t_odd', { v: col.custom<string>('geometry', String, String) })
+    assert.throws(() => db.createTableSql(Odd), /dbType/)
+    assert.match(db.createTableSql(entity('t_odd', { v: col.custom<string>('geometry', String, String).dbType('POINT') })), /`v` POINT NOT NULL/)
   })
 })

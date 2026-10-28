@@ -1,3 +1,5 @@
+import type { SelectNode } from './ast.ts'
+
 /**
  * 实体与列的定义。列的 TS 类型、是否可空、是否由库生成都记在类型参数里，查询与插入的类型由它推导，不需要代码生成。
  *
@@ -26,12 +28,43 @@ export interface Codec<T> {
  */
 export type ColumnKind = 'string' | 'int' | 'bigint' | 'decimal' | 'double' | 'boolean' | 'date' | 'time' | 'datetime' | 'json' | 'bytes' | (string & {})
 
+/** 逻辑删除：active 是"未删除"时的值（null 表示 IS NULL），deleted 是删除时写入的值（可以是函数，如当前时间） */
+export interface SoftDelete {
+  readonly active: unknown
+  readonly deleted: unknown
+}
+
 export interface ColumnOptions {
   readonly nullable: boolean
   readonly primaryKey: boolean
   readonly generated: boolean
   readonly hasDefault: boolean
   readonly name?: string
+  /** 插入时没给值就用它（客户端生成，如 uuid、雪花 id） */
+  readonly defaultFn?: (() => unknown) | undefined
+  /** 更新时没给值就用它（如更新时间） */
+  readonly onUpdateFn?: (() => unknown) | undefined
+  readonly softDelete?: SoftDelete | undefined
+  /** 乐观锁版本列 */
+  readonly version?: boolean | undefined
+  /** 只在插入时写入，更新永远不碰（创建人、创建时间） */
+  readonly insertOnly?: boolean | undefined
+  // ---- 建表（createTables）用的元数据，查询和写入不看它们 ----
+  /** 字符串列的长度，默认 255 */
+  readonly length?: number | undefined
+  readonly precision?: number | undefined
+  readonly scale?: number | undefined
+  /** 直接指定库里的列类型（如 'JSONB'、'TEXT'），优先于按 kind 推断 */
+  readonly dbType?: string | undefined
+  /** 库里的默认值，原样写进 DEFAULT 子句（受信任的 SQL，如 `'draft'`、`CURRENT_TIMESTAMP`） */
+  readonly dbDefault?: string | undefined
+  readonly unique?: boolean | undefined
+}
+
+/** 字符串列的加解密策略：写入前 encrypt、读出后 decrypt。要用 eq 查询必须是确定性的（同一明文得到同一密文） */
+export interface Encryption {
+  encrypt(plain: string): string
+  decrypt(cipher: string): string
 }
 
 /** 一列：T 是 JS 类型，N 是否可空，O 插入时是否可省（自增、有默认值、可空） */
@@ -66,6 +99,66 @@ export class Column<T, N extends boolean = false, O extends boolean = false> {
     return new Column(this.codec, { ...this.options, hasDefault: true })
   }
 
+  /** 插入时没给值就调用 fn 生成（uuid、雪花 id 等客户端生成的默认值）；插入时这一列可省 */
+  $default(fn: () => T): Column<T, N, true> {
+    return new Column(this.codec, { ...this.options, defaultFn: fn })
+  }
+
+  /** 更新时没给值就调用 fn（更新时间、更新人） */
+  $onUpdate(fn: () => T): Column<T, N, O> {
+    return new Column(this.codec, { ...this.options, onUpdateFn: fn })
+  }
+
+  /** 只改 TS 类型不改运行时：品牌类型（`col.bigint().$type<UserId>()`）让不同表的 id 不能混用 */
+  $type<U extends T>(): Column<U, N, O> {
+    return new Column(this.codec as unknown as Codec<U>, this.options)
+  }
+
+  /**
+   * 逻辑删除列：delete 改写成把这一列设为 deleted 的 update；读、改、删（含导航的 JOIN 与子查询）自动只看 active 的行；
+   * 插入时没给值就写 active。不传参数时布尔列是 false / true，整数列是 0 / 1；其它类型（如可空时间戳 `{ active: null, deleted: () => new Date() }`）要显式给。
+   * 单条语句用 `noInterceptor('softDelete')` 看到已删除的行；`delete(X).hard()` 物理删除。
+   */
+  softDelete(values?: { active: T | null; deleted: T | (() => T) }): Column<T, N, true> {
+    const kind = this.codec.kind
+    const chosen = values ?? (kind === 'boolean' ? { active: false, deleted: true } : kind === 'int' || kind === 'bigint' ? { active: 0, deleted: 1 } : undefined)
+    if (!chosen) throw new Error(`softDelete() needs explicit { active, deleted } values on a '${kind}' column`)
+    return new Column(this.codec, { ...this.options, softDelete: chosen })
+  }
+
+  /** 乐观锁版本列（整数）：插入为 0；`update(X).entity(row)` 带上版本条件并加 1，没更新到行就抛错；其它更新自动加 1 */
+  version(): Column<T, N, true> {
+    if (this.codec.kind !== 'int' && this.codec.kind !== 'bigint') throw new Error(`version() needs an integer column, got '${this.codec.kind}'`)
+    return new Column(this.codec, { ...this.options, version: true })
+  }
+
+  /** 只在插入时写入，更新永远不碰；在 set 里给它赋值会报错 */
+  insertOnly(): Column<T, N, O> {
+    return new Column(this.codec, { ...this.options, insertOnly: true })
+  }
+
+  /** 透明加解密（仅字符串列） */
+  encrypted(this: Column<string, N, O>, strategy: Encryption): Column<string, N, O> {
+    const inner = this.codec
+    const codec: Codec<string> = { kind: inner.kind, decode: (raw) => strategy.decrypt(inner.decode(raw)), encode: (v) => inner.encode(strategy.encrypt(v)) }
+    return new Column(codec, this.options)
+  }
+
+  /** 建表时直接用这个类型，如 `col.json<Tags>().dbType('JSONB')`；不影响读写 */
+  dbType(type: string): Column<T, N, O> {
+    return new Column(this.codec, { ...this.options, dbType: type })
+  }
+
+  /** 建表时的 DEFAULT 子句，原样写入（受信任的 SQL）：`.dbDefault("'draft'")`；同时让插入时这一列可省 */
+  dbDefault(sql: string): Column<T, N, true> {
+    return new Column(this.codec, { ...this.options, dbDefault: sql, hasDefault: true })
+  }
+
+  /** 建表时加唯一约束 */
+  unique(): Column<T, N, O> {
+    return new Column(this.codec, { ...this.options, unique: true })
+  }
+
   /** 库里的列名（默认是属性名转下划线） */
   named(name: string): Column<T, N, O> {
     return new Column(this.codec, { ...this.options, name })
@@ -77,6 +170,12 @@ export class Column<T, N extends boolean = false, O extends boolean = false> {
  * 一是让 `'10.50'` 这样的字面量可以直接写入，二是让算术方法能区分"数值文字"和普通字符串。
  */
 export type DecimalText = `${number}`
+
+/**
+ * 日历日期文字 'YYYY-MM-DD'：date 列在 JS 里的类型。同样用模板字面量类型，`'2026-01-02'` 可以直接写入，
+ * 而普通字符串列不能调用 year() / month() / dateTrunc() 这类日期方法。
+ */
+export type DateText = `${number}-${number}-${number}`
 
 const SAFE_MAX = BigInt(Number.MAX_SAFE_INTEGER)
 
@@ -106,7 +205,7 @@ export function utcText(d: Date): string {
 
 /**
  * 驱动读出的日期时间 → Date（无时区的文字按 UTC 读）。
- * 导出给 @eqts/date 等扩展列类型复用，保证各种日期类型"驱动值怎么读"的口径一致。
+ * 导出给 @zerodep-dev/easy-query-ts-date 等扩展列类型复用，保证各种日期类型"驱动值怎么读"的口径一致。
  */
 export function toDate(raw: unknown): Date {
   if (raw instanceof Date) return raw
@@ -132,13 +231,48 @@ function hexToBytes(text: string): Uint8Array {
   return Uint8Array.from(hex.match(/../g) ?? [], (b) => parseInt(b, 16))
 }
 
-function base<T>(c: Codec<T>): Column<T, false, false> {
-  return new Column(c, { nullable: false, primaryKey: false, generated: false, hasDefault: false })
+function base<T>(c: Codec<T>, extra: Partial<ColumnOptions> = {}): Column<T, false, false> {
+  return new Column(c, { nullable: false, primaryKey: false, generated: false, hasDefault: false, ...extra })
+}
+
+/**
+ * Standard Schema（https://standardschema.dev）的最小子集：只依赖 `~standard.validate`，不引入任何校验库。
+ * zod ≥3.24、valibot、arktype 等都实现了它。
+ */
+export interface StandardSchema<Output = unknown> {
+  readonly '~standard': {
+    readonly version: 1
+    readonly vendor: string
+    readonly validate: (value: unknown) => { readonly value: Output; readonly issues?: undefined } | { readonly issues: readonly { readonly message: string; readonly path?: readonly unknown[] | undefined }[] } | Promise<unknown>
+    /** 仅类型用：校验器的输出类型 */
+    readonly types?: { readonly input: unknown; readonly output: Output } | undefined
+  }
+}
+
+/** 同步校验：不合格或校验器是异步的都抛错 */
+function validated<T>(schema: StandardSchema<T>, value: unknown, what: string): T {
+  const result = schema['~standard'].validate(value)
+  if (result instanceof Promise) throw new TypeError(`${what}: asynchronous schemas are not supported for json columns`)
+  const r = result as { value?: T; issues?: readonly { message: string; path?: readonly unknown[] | undefined }[] }
+  if (r.issues) {
+    const list = r.issues.map((i) => (i.path && i.path.length > 0 ? `${i.path.map(String).join('.')}: ${i.message}` : i.message)).join('; ')
+    throw new TypeError(`${what}: invalid JSON value: ${list}`)
+  }
+  return r.value as T
+}
+
+function jsonColumn<T = unknown>(): Column<T, false, false>
+function jsonColumn<S extends StandardSchema>(schema: S): Column<S extends StandardSchema<infer O> ? O : never, false, false>
+function jsonColumn(schema?: StandardSchema): Column<unknown, false, false> {
+  const parse = (r: unknown): unknown => (typeof r === 'string' ? JSON.parse(r) : r)
+  if (!schema) return base(codec<unknown>('json', parse, (v) => JSON.stringify(v)))
+  return base(codec<unknown>('json', (r) => validated(schema, parse(r), 'read'), (v) => JSON.stringify(validated(schema, v, 'write'))))
 }
 
 /** 列的类型 */
 export const col = {
-  string: () => base(codec<string>('string', (r) => String(r))),
+  /** 字符串；length 只在建表时用（默认 255） */
+  string: (length?: number) => base(codec<string>('string', (r) => String(r)), { length }),
   int: () => base(codec<number>('int', toNumber)),
   /** 64 位整数；mode 'number'（默认，超出安全整数时报错）、'bigint'、'string' */
   bigint: <M extends 'number' | 'bigint' | 'string' = 'number'>(opts?: { mode?: M }) => {
@@ -147,26 +281,52 @@ export const col = {
     const decode = (r: unknown): V => (mode === 'bigint' ? BigInt(r as string) : mode === 'string' ? String(r) : toNumber(r)) as V
     return base(codec<V>('bigint', decode))
   },
-  /** 精确小数：JS 里是数值文字（DecimalText），不经过浮点；要对象形式可用 @eqts/decimal 的 decimalJs() */
-  decimal: (_precision?: number, _scale?: number) => base(codec<DecimalText>('decimal', (r) => String(r) as DecimalText)),
+  /** 精确小数：JS 里是数值文字（DecimalText），不经过浮点；要对象形式可用 @zerodep-dev/easy-query-ts-decimal 的 decimalJs() */
+  decimal: (precision?: number, scale?: number) => base(codec<DecimalText>('decimal', (r) => String(r) as DecimalText), { precision, scale }),
   double: () => base(codec<number>('double', (r) => Number(r))),
   /** 绑定时交给方言转换（SQLite / MySQL 写 1 / 0，PG 原样传布尔） */
   boolean: () => base(codec<boolean>('boolean', (r) => r === true || r === 1 || r === '1' || r === 1n || r === 't')),
   /** 日历日期 'YYYY-MM-DD'，不经过时区 */
-  date: () => base(codec<string>('date', toDateText)),
+  date: () => base(codec<DateText>('date', (r) => toDateText(r) as DateText)),
   /** 一天里的时刻 'HH:MM:SS' */
   time: () => base(codec<string>('time', (r) => String(r).slice(0, 8))),
   /** 时刻：JS 的 Date，库里按 UTC 存 */
   datetime: () => base(codec<Date>('datetime', toDate, (v) => utcText(v))),
   /** 二进制：JS 里是 Uint8Array（驱动给的 Buffer 会复制成普通的 Uint8Array），库里是 BLOB / BYTEA */
   bytes: () => base(codec<Uint8Array>('bytes', (r) => (typeof r === 'string' ? hexToBytes(r) : new Uint8Array(r as ArrayLike<number>)))),
-  json: <T>() => base(codec<T>('json', (r) => (typeof r === 'string' ? JSON.parse(r) : r) as T, (v) => JSON.stringify(v))),
+  /**
+   * JSON 列。只写泛型时不校验（`col.json<Tags>()`）；传入符合 Standard Schema 的校验器（zod、valibot、arktype 等）时，
+   * 类型取自校验器的输出，读出和写入都会校验，不合格抛错并带上问题列表：`col.json(z.object({ tags: z.array(z.string()) }))`。
+   * 校验器必须是同步的。
+   */
+  json: jsonColumn,
+  /** 字符串枚举：写入和读出都校验在列表里，TS 类型是这些字面量的并集 */
+  enum: <const V extends string>(values: readonly V[]) => {
+    const check = (v: unknown): V => {
+      if (!values.includes(v as V)) throw new TypeError(`'${String(v)}' is not one of ${values.map((x) => `'${x}'`).join(', ')}`)
+      return v as V
+    }
+    return base(codec<V>('string', (r) => check(String(r)), check))
+  },
   /** 自定义的读写 */
   custom: <T>(kind: ColumnKind, decode: (raw: unknown) => T, encode: (value: T) => unknown) => base(codec<T>(kind, decode, encode)),
 }
 
 export type AnyColumn = Column<any, boolean, boolean>
 export type Columns = Record<string, AnyColumn>
+
+/**
+ * 派生实体的来源：不是真实的表，而是一条查询的结果。
+ * subquery 渲染为 `FROM (子查询) 别名`；cte 渲染为最外层的 `WITH 名字 (列) AS (子查询)`，再 `FROM 名字`。
+ */
+export interface DerivedSource {
+  readonly kind: 'subquery' | 'cte'
+  /** 子查询。递归 CTE 要先登记名字才能构建它的递归部分，所以构建完成后才写入这个字段 */
+  q: SelectNode
+  readonly recursive: boolean
+  /** 子查询输出的列名，顺序与 q 的 columns 一致 */
+  readonly columns: readonly string[]
+}
 
 /** 一个实体：名字、表名、列 */
 export interface Entity<Name extends string = string, C extends Columns = Columns> {
@@ -177,7 +337,13 @@ export interface Entity<Name extends string = string, C extends Columns = Column
   /** 属性名 → 库里的列名 */
   readonly columnNames: { readonly [K in keyof C]: string }
   readonly primaryKey: readonly (keyof C & string)[]
+  /** 派生实体（子查询 / CTE）才有；普通的表没有 */
+  readonly derived?: DerivedSource
 }
+
+/** 一条查询的结果行（Out，列名 → 类型）对应的派生实体的列：值可空的列对应可空列 */
+export type DerivedColumns<Out> = { [P in keyof Out & string]: Column<NonNullable<Out[P]>, null extends Out[P] ? true : false, false> }
+export type DerivedEntity<Name extends string, Out> = Entity<Name, DerivedColumns<Out>>
 
 function snake(name: string): string {
   return name.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase())

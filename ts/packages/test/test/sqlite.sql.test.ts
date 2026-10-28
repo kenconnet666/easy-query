@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { or, sql } from '@eqts/core'
-import { Comment, Post, User } from '../src/fixture.ts'
+import { or, sql } from '@zerodep-dev/easy-query-ts'
+import { Comment, Gadget, Post, User } from '../src/fixture.ts'
 import { memoryDb } from '../src/sqlite-env.ts'
 
 describe('sqlite: SQL text', async () => {
@@ -122,3 +122,19 @@ describe('sqlite: native SQL', async () => {
     assert.deepEqual(statements.at(-1)!.params, ['2026-01-02 03:04:05.006', 1])
   })
 })
+
+describe('sqlite: code-first DDL', async () => {
+  const { db } = await memoryDb()
+
+  it('renders CREATE TABLE from the entity definition', () => {
+    // 自增主键写在列上；日期时间是 TEXT、布尔是 INTEGER；DEFAULT 原样写入；唯一约束放在最后
+    assert.equal(db.createTableSql(Gadget), 'CREATE TABLE IF NOT EXISTS "t_gadget" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "name" TEXT NOT NULL, "price" NUMERIC NOT NULL,'
+      + ' "qty" INTEGER NOT NULL DEFAULT 0, "active" INTEGER NOT NULL, "born" TEXT, "seen_at" TEXT NOT NULL, "tags" TEXT NOT NULL, "photo" BLOB, UNIQUE ("name"))')
+  })
+
+  it('refuses to create derived tables', () => {
+    const cte = db.with('recent', db.queryable(Post).select((p) => ({ id: p.id })))
+    assert.throws(() => cte.createTableSql(cte.entity('recent')), /derived/)
+  })
+})
+

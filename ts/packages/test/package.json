@@ -1,5 +1,5 @@
 {
-  "name": "@eqts/test",
+  "name": "@zerodep-dev/easy-query-ts-test",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,13 +9,14 @@
     "./sqlite-env": "./src/sqlite-env.ts"
   },
   "dependencies": {
-    "@eqts/core": "workspace:*",
-    "@eqts/sqlite": "workspace:*",
-    "@eqts/decimal": "workspace:*",
-    "@eqts/date": "workspace:*"
+    "@zerodep-dev/easy-query-ts": "workspace:*",
+    "@zerodep-dev/easy-query-ts-sqlite": "workspace:*",
+    "@zerodep-dev/easy-query-ts-decimal": "workspace:*",
+    "@zerodep-dev/easy-query-ts-date": "workspace:*"
   },
   "devDependencies": {
     "decimal.js": "10.6.0",
-    "@internationalized/date": "3.12.4"
+    "@internationalized/date": "3.12.4",
+    "zod": "4.6.7"
   }
 }

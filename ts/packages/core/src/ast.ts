@@ -16,6 +16,10 @@ export type Node =
   | { readonly k: 'not'; readonly e: Node }
   | { readonly k: 'null'; readonly e: Node; readonly not: boolean }
   | { readonly k: 'in'; readonly e: Node; readonly list: readonly Node[]; readonly not: boolean }
+  /** null 安全的相等：两边都是 NULL 也算相等 */
+  | { readonly k: 'eq_ns'; readonly l: Node; readonly r: Node }
+  /** e [NOT] IN (子查询)；子查询是独立的语句，不引用外层的表 */
+  | { readonly k: 'in_sub'; readonly e: Node; readonly q: SelectNode; readonly not: boolean }
   | { readonly k: 'between'; readonly e: Node; readonly lo: Node; readonly hi: Node }
   /** LIKE；pattern 已经转义过 % _ \ 并加好通配符 */
   | { readonly k: 'like'; readonly e: Node; readonly pattern: Node; readonly not: boolean }
@@ -63,6 +67,22 @@ export interface SelectNode {
   readonly limit: number | undefined
   readonly offset: number | undefined
   readonly forUpdate: boolean
+  /** 行锁遇到被别人锁住的行怎么办：nowait 立即报错，skip 跳过那些行；省略为等待 */
+  readonly lockWait?: 'nowait' | 'skip' | undefined
+  /** GROUP BY 的方式：rollup 逐级小计加总计，cube 所有组合；省略为普通分组 */
+  readonly groupMode?: 'rollup' | 'cube' | undefined
+  /** 复合查询：本查询 UNION [ALL] 后面这些；各成员不带 orderBy / limit / offset（需要时包一层派生表） */
+  readonly unions?: readonly { readonly all: boolean; readonly q: SelectNode }[] | undefined
+  /** 本语句用到的 CTE（WITH），只放在最外层的语句上，按依赖顺序排好 */
+  readonly ctes?: readonly CteNode[] | undefined
+}
+
+/** WITH [RECURSIVE] name (columns) AS (q) */
+export interface CteNode {
+  readonly name: string
+  readonly recursive: boolean
+  readonly columns: readonly string[]
+  readonly q: SelectNode
 }
 
 export interface InsertNode {
@@ -70,6 +90,8 @@ export interface InsertNode {
   readonly columns: readonly string[]
   readonly rows: readonly (readonly Node[])[]
   readonly conflict: ConflictNode | undefined
+  /** INSERT … SELECT：行来自这条查询（此时 rows 为空，columns 与查询的输出列按位置对应） */
+  readonly source?: SelectNode | undefined
 }
 
 /** upsert：target 列冲突时，update 为空表示忽略这一行，否则用新值更新这些列 */
@@ -95,6 +117,8 @@ export function checkAliases(q: SelectNode | UpdateNode | DeleteNode, outer: Rea
   declared.add(q.from.alias)
   // 派生表是独立的语句：只能引用它自己声明的表
   if (q.from.sub) checkAliases(q.from.sub)
+  // 复合查询的每个成员都是独立的语句
+  if ('unions' in q) q.unions?.forEach((u) => checkAliases(u.q))
   const joins = 'joins' in q ? q.joins : []
   for (const j of joins) declared.add(j.alias)
   const visit = (n: Node): void => {
@@ -110,6 +134,8 @@ export function checkAliases(q: SelectNode | UpdateNode | DeleteNode, outer: Rea
       case 'and': case 'or': n.items.forEach(visit); return
       case 'not': case 'null': visit(n.e); return
       case 'in': visit(n.e); n.list.forEach(visit); return
+      case 'in_sub': visit(n.e); checkAliases(n.q); return
+      case 'eq_ns': visit(n.l); visit(n.r); return
       case 'between': visit(n.e); visit(n.lo); visit(n.hi); return
       case 'like': visit(n.e); visit(n.pattern); return
       case 'fn': n.args.forEach(visit); return

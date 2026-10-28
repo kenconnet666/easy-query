@@ -1,12 +1,12 @@
-# easy-query TS 版（@eqts/*）
+# easy-query TS 版（@zerodep-dev/easy-query-ts*）
 
 与 Java 版 easy-query 同一套思路：实体 + 导航、lambda 里写条件、隐式 join、隐式子查询、对象树结果；结果类型全由 TS 推导，不需要代码生成。
 设计与取舍见 [docs/fork/decisions/0002-ts-design.md](../docs/fork/decisions/0002-ts-design.md)。
 
 ```ts
 import { DatabaseSync } from 'node:sqlite'
-import { col, createDb, defineSchema, entity } from '@eqts/core'
-import { sqlite } from '@eqts/sqlite'
+import { col, createDb, defineSchema, entity } from '@zerodep-dev/easy-query-ts'
+import { sqlite } from '@zerodep-dev/easy-query-ts-sqlite'
 
 const User = entity('t_user', { id: col.bigint().primaryKey().generated(), name: col.string(), companyId: col.bigint().nullable() })
 const Company = entity('t_company', { id: col.bigint().primaryKey().generated(), name: col.string() })
@@ -25,14 +25,14 @@ const rows = await db.queryable(Company)
 
 | 包 | 内容 |
 |---|---|
-| `@eqts/core` | 实体、关系、表达式、语法树、方言基类、查询/写入构建器、结果拼装 |
-| `@eqts/sqlite` | `node:sqlite`（Node 自带，测试零依赖） |
-| `@eqts/mysql` | `mysql2/promise` 连接池；MySQL 8.0.18（PolarDB）起 |
-| `@eqts/pg` | `pg`（node-postgres）连接池；PG 12+，自增主键用 RETURNING 取回 |
-| `@eqts/hana` | `hdb`（SAP 的纯 JS 驱动，免原生编译）+ 自带小连接池；HANA 2.0，upsert 写成 MERGE，多行插入写成 SELECT … FROM DUMMY UNION ALL |
-| `@eqts/decimal` | decimal.js 的 `Decimal` 列（`decimalJs()`）；decimal.js 是 peer 依赖 |
-| `@eqts/date` | `@internationalized/date` 的 `CalendarDate / CalendarDateTime / ZonedDateTime / Time` 列；该库是 peer 依赖 |
-| `@eqts/test` | 独立测试模块：共用夹具、跨方言套件、类型检查、SQLite 测试（见 [packages/test/README.md](packages/test/README.md)） |
+| `@zerodep-dev/easy-query-ts` | 实体、关系、表达式、语法树、方言基类、查询/写入构建器、结果拼装 |
+| `@zerodep-dev/easy-query-ts-sqlite` | `node:sqlite`（Node 自带，测试零依赖） |
+| `@zerodep-dev/easy-query-ts-mysql` | `mysql2/promise` 连接池；MySQL 8.0.18（PolarDB）起 |
+| `@zerodep-dev/easy-query-ts-pg` | `pg`（node-postgres）连接池；PG 12+，自增主键用 RETURNING 取回 |
+| `@zerodep-dev/easy-query-ts-hana` | `hdb`（SAP 的纯 JS 驱动，免原生编译）+ 自带小连接池；HANA 2.0，upsert 写成 MERGE，多行插入写成 SELECT … FROM DUMMY UNION ALL |
+| `@zerodep-dev/easy-query-ts-decimal` | decimal.js 的 `Decimal` 列（`decimalJs()`）；decimal.js 是 peer 依赖 |
+| `@zerodep-dev/easy-query-ts-date` | `@internationalized/date` 的 `CalendarDate / CalendarDateTime / ZonedDateTime / Time` 列；该库是 peer 依赖 |
+| `@zerodep-dev/easy-query-ts-test` | 独立测试模块：共用夹具、跨方言套件、类型检查、SQLite 测试（见 [packages/test/README.md](packages/test/README.md)） |
 
 ## 开发
 
