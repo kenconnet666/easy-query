@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { or, sql } from '@eqts/core'
-import { Post, User } from '../src/fixture.ts'
+import { Comment, Post, User } from '../src/fixture.ts'
 import { memoryDb } from '../src/sqlite-env.ts'
 
 describe('sqlite: SQL text', async () => {
@@ -77,6 +77,16 @@ describe('sqlite: SQL text', async () => {
 
   it('rejects joins in writes', () => {
     assert.throws(() => db.delete(User).where((u) => u.company.name.eq('acme')).toSQL(), /JOIN/)
+  })
+
+  it('renders explicit joins in call order with their ON conditions', () => {
+    const s = db.queryable(User)
+      .innerJoin(Post, (u, p) => p.userId.eq(u.id))
+      .leftJoin(Comment, (_u, p, c) => c.postId.eq(p.id))
+      .select((u, p, c) => ({ name: u.name, title: p.title, body: c.body }))
+      .toSQL()
+    assert.equal(s.sql, 'SELECT t0."name" AS "c0", t1."title" AS "c1", t2."body" AS "c2" FROM "t_user" t0'
+      + ' INNER JOIN "t_post" t1 ON t1."user_id" = t0."id" LEFT JOIN "t_comment" t2 ON t2."post_id" = t1."id"')
   })
 
   it('splits big inserts into statements that stay below the bind-parameter limit', () => {

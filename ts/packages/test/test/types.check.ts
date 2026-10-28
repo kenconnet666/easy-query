@@ -89,6 +89,35 @@ async function results() {
 }
 void results
 
+// 显式 join：lambda 按 join 顺序收到各表引用；left join 的那张表列可空；没写 select 时按实体名分组
+async function joins() {
+  const inner = await db.queryable(User).innerJoin(Post, (u, p) => p.userId.eq(u.id)).select((u, p) => ({ name: u.name, title: p.title })).toList()
+  expect<Equal<typeof inner, { name: string; title: string }[]>>()
+
+  const left = await db.queryable(User).leftJoin(Post, (u, p) => p.userId.eq(u.id)).select((u, p) => ({ name: u.name, title: p.title })).toList()
+  expect<Equal<typeof left, { name: string; title: string | null }[]>>()
+
+  const rows = await db.queryable(User).innerJoin(Post, (u, p) => p.userId.eq(u.id)).leftJoin(Company, (u, _p, c) => c.id.eq(u.companyId)).toList()
+  expect<Equal<typeof rows, { User: Row<typeof User>; Post: Row<typeof Post>; Company: Row<typeof Company> | null }[]>>()
+
+  // join 之后 where / orderBy / groupBy 都按顺序收到各表引用
+  const grouped = await db.queryable(User).innerJoin(Post, (u, p) => p.userId.eq(u.id))
+    .where((u, p) => [u.age.ge(18), p.amount.gt('5')])
+    .groupBy((u) => ({ name: u.name }))
+    .select((g) => ({ name: g.key.name, total: g.sum((_u, p) => p.amount) }))
+    .toList()
+  expect<Equal<typeof grouped, { name: string; total: `${number}` | null }[]>>()
+
+  const total = await db.queryable(User).innerJoin(Post, (u, p) => p.userId.eq(u.id)).sum((_u, p) => p.amount)
+  expect<Equal<typeof total, `${number}` | null>>()
+}
+void joins
+
+// @ts-expect-error join 的 on 里新表没有这个列
+db.queryable(User).innerJoin(Post, (u, p) => p.nope.eq(u.id))
+// @ts-expect-error 实体不在 schema 里
+db.queryable(User).innerJoin(Unrelated, (u, x) => x.id.eq(u.id))
+
 // decimal 列可以做算术（数值文字或 number），结果仍是 decimal；普通字符串列不行
 db.update(Post).set((p) => ({ amount: p.amount.times(2) })).where((p) => p.amount.plus('1.5').gt('3'))
 db.queryable(Post).select((p) => ({ doubled: p.amount.times(2), shifted: p.amount.minus(p.amount) }))

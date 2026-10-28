@@ -7,7 +7,7 @@ export type { Arith, CastTypes, Cond, NumericExtensions, Numeric, Operand, Order
 export { ListOf, ManyRef } from './ref.ts'
 export type { Ref, Selected } from './ref.ts'
 export { GroupedQueryable, Queryable } from './query.ts'
-export type { Group, Page } from './query.ts'
+export type { Group, JoinedRows, Page } from './query.ts'
 export { Deletable, Insertable, InsertValues, Updatable } from './mutation.ts'
 export type { SetValues } from './mutation.ts'
 export { createDb, Db } from './db.ts'

@@ -127,7 +127,7 @@ export abstract class Dialect {
   select(q: SelectNode, w: SqlWriter = new SqlWriter()): string {
     const cols = q.columns.length === 0 ? '1' : q.columns.map((c) => `${this.node(c.e, w)} AS ${this.quote(c.as)}`).join(', ')
     let s = `SELECT ${q.distinct ? 'DISTINCT ' : ''}${cols} FROM ${q.from.sub ? `(${this.select(q.from.sub, w)})` : this.table(q.from.table)} ${q.from.alias}`
-    for (const j of q.joins) s += ` LEFT JOIN ${this.table(j.table)} ${j.alias} ON ${this.node(j.on, w)}`
+    for (const j of q.joins) s += ` ${j.kind === 'inner' ? 'INNER' : 'LEFT'} JOIN ${this.table(j.table)} ${j.alias} ON ${this.node(j.on, w)}`
     if (q.where.length > 0) s += ` WHERE ${this.conjunction(q.where, w)}`
     if (q.groupBy.length > 0) s += ` GROUP BY ${q.groupBy.map((g) => this.node(g, w)).join(', ')}`
     if (q.having.length > 0) s += ` HAVING ${this.conjunction(q.having, w)}`
