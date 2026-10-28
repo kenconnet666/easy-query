@@ -7,7 +7,7 @@
  */
 import hdb, { type Client } from 'hdb'
 import { hanaFunctions } from './functions.ts'
-import { Dialect, SqlWriter, type ColumnOptions, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type InsertNode, type Session, type TransactionOptions } from '@eqts/core'
+import { Dialect, SqlWriter, type ColumnOptions, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type InsertNode, type Session, type TransactionOptions } from '@zerodep-dev/easy-query-ts'
 
 export { Hana } from './functions.ts'
 

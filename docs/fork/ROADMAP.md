@@ -68,16 +68,16 @@ M3b：
 - [x] T0 设计文档 [decisions/0002-ts-design.md](decisions/0002-ts-design.md) 与类型样板：50 实体 / 5 层导航 tsc 0.15s，无 TS2589；结果类型正例与负例固定在 `ts/packages/test/test/*.check.ts`
 - [x] T1 核心 AST + SQLite（node:sqlite，零基础设施）+ MySQL（mysql2，8.0.18 与 8.4 实测）：CRUD、where/select/orderBy/分页、分组、事务、写入无条件保护
 - [x] T2 导航：隐式 join（可空推导）、隐式子查询（any/none/count/sum/avg/max/min）、toList 对象树（每层一条 IN 查询）、include
-- [x] T3 方言静态入口 `MySQL / Pg / Hana`、按主键整行更新 `update(X).entity(row)`；PG 适配 `@eqts/pg`；HANA 适配 `@eqts/hana`（hdb，HANA 2.0 实测）；拦截器 tenant / touch / 自定义；upsert onConflict merge / ignore；窗口函数 `win.*`；toList `limit(n)` / `first()`——SQLite、MySQL 8.0.18 / 8.4、PG 17、HANA 2.0 共 147 个用例实测
+- [x] T3 方言静态入口 `MySQL / Pg / Hana`、按主键整行更新 `update(X).entity(row)`；PG 适配 `@zerodep-dev/easy-query-ts-pg`；HANA 适配 `@zerodep-dev/easy-query-ts-hana`（hdb，HANA 2.0 实测）；拦截器 tenant / touch / 自定义；upsert onConflict merge / ignore；窗口函数 `win.*`；toList `limit(n)` / `first()`——SQLite、MySQL 8.0.18 / 8.4、PG 17、HANA 2.0 共 147 个用例实测
 - [ ] T4 `pull`：从现有库生成 schema 文件（进 BACKLOG，T3 后视情况）
 - [x] CI 加 ts job：typecheck（含类型样板）、SQLite 单测、MySQL 8.0.18 服务容器跑共用套件
 
 ## M7 TS 版补全（依据 2026-10-28 对照 Java 版的缺口分析；每项一个独立工作项，代码与测试一律带中文注释）
 
-约定：测试集中在独立模块 `ts/packages/test`（`@eqts/test`）——共享夹具、共用套件、类型检查、SQLite 零基础设施的特性测试都放这里；mysql / pg / hana 包只留依赖各自驱动的实库测试，并从 `@eqts/test` 取夹具与共用套件。
+约定：测试集中在独立模块 `ts/packages/test`（`@zerodep-dev/easy-query-ts-test`）——共享夹具、共用套件、类型检查、SQLite 零基础设施的特性测试都放这里；mysql / pg / hana 包只留依赖各自驱动的实库测试，并从 `@zerodep-dev/easy-query-ts-test` 取夹具与共用套件。
 
 P0（日常会撞上，或有正确性风险）：
-- [x] 7.0 独立测试模块 `@eqts/test`（夹具 / 共用套件 / 类型检查 / SQLite 测试迁入）
+- [x] 7.0 独立测试模块 `@zerodep-dev/easy-query-ts-test`（夹具 / 共用套件 / 类型检查 / SQLite 测试迁入）
 - [x] 7.1 根查询聚合：`db.queryable(X).sum / avg / max / min(...)`（不必借 groupBy）
 - [x] 7.2 decimal（字符串）列可做算术：`plus / minus / times / div` 接受 number、bigint、十进制文字
 - [x] 7.3 多行插入按方言绑定参数上限自动分块；`in(...)` 超限给出清晰报错（PG 数组参数方案进 BACKLOG）
@@ -89,7 +89,7 @@ P0（日常会撞上，或有正确性风险）：
 - [x] 7.9 `union / unionAll`、CTE（含递归）、派生表 `from(query)`、`in(子查询)`
 - [x] 7.10 列修饰器：`$default / $onUpdate / softDelete / version / $type<Brand>() / enum / encrypted / insertOnly`（`ignore` 不做：TS 版实体与表一一对应）；逻辑删除把 delete 改写为 update 并给读加过滤
 - [x] 7.11 构建与发布：tsc 产出 `dist/*.js` + `.d.ts`，`exports` 指向 dist（Node 不对 `node_modules` 里的 `.ts` 做类型剥离，现在不能当 npm 包用）
-- [x] 7.19 扩展列类型：`@eqts/decimal`（decimal.js）、`@eqts/date`（`@internationalized/date`）、`col.bytes()`、精确的 64 位整数；`NumericExtensions` / `TemporalExtensions` 声明合并扩展点，`ColumnKind` 开放；与 json-wire 的种类表一一对应并做过端到端往返检查（vue-tsx-pro 的日期组件用同一批类）
+- [x] 7.19 扩展列类型：`@zerodep-dev/easy-query-ts-decimal`（decimal.js）、`@zerodep-dev/easy-query-ts-date`（`@internationalized/date`）、`col.bytes()`、精确的 64 位整数；`NumericExtensions` / `TemporalExtensions` 声明合并扩展点，`ColumnKind` 开放；与 json-wire 的种类表一一对应并做过端到端往返检查（vue-tsx-pro 的日期组件用同一批类）
 
 P1（能力对齐）：
 - [x] 7.12 `defineView`：可复用、可嵌套的投影（对应 Java 的 DTO / VO）

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, it } from 'node:test'
-import { col, createDb, defineSchema, entity, type StandardSchema } from '@eqts/core'
-import { sqlite } from '@eqts/sqlite'
+import { col, createDb, defineSchema, entity, type StandardSchema } from '@zerodep-dev/easy-query-ts'
+import { sqlite } from '@zerodep-dev/easy-query-ts-sqlite'
 import { z } from 'zod'
 
 // zod 实现了 Standard Schema：直接传进 col.json，类型从校验器推导

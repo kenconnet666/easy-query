@@ -8,7 +8,7 @@
  * TIMESTAMP 列会按会话时区换算，建议连接池设 `timezone: 'Z'` 并让会话时区为 +00:00。
  */
 import type { Pool, PoolConnection, ResultSetHeader } from 'mysql2/promise'
-import { Dialect, type ColumnOptions, type Adapter, type ConflictNode, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type SqlWriter, type TransactionOptions } from '@eqts/core'
+import { Dialect, type ColumnOptions, type Adapter, type ConflictNode, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type SqlWriter, type TransactionOptions } from '@zerodep-dev/easy-query-ts'
 import { mysqlFunctions } from './functions.ts'
 
 export { MySQL } from './functions.ts'

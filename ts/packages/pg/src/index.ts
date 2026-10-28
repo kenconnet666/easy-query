@@ -10,7 +10,7 @@
 import pg from 'pg'
 import type { Pool, PoolClient, QueryConfig, QueryResult } from 'pg'
 import { pgFunctions } from './functions.ts'
-import { Dialect, type ColumnOptions, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Node, type Session, type SqlWriter, type TransactionOptions } from '@eqts/core'
+import { Dialect, type ColumnOptions, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Node, type Session, type SqlWriter, type TransactionOptions } from '@zerodep-dev/easy-query-ts'
 
 export { Pg } from './functions.ts'
 

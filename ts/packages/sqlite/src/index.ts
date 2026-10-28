@@ -7,7 +7,7 @@
  * 注意：同一个 DatabaseSync 只有一条连接，事务进行中其它异步代码发出的语句也会落在这个事务里；事务之间按顺序排队。
  */
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
-import { Dialect, type ColumnOptions, type Entity, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type TransactionOptions } from '@eqts/core'
+import { Dialect, type ColumnOptions, type Entity, type Adapter, type Driver, type ExecuteResult, type FunctionRenderer, type Session, type TransactionOptions } from '@zerodep-dev/easy-query-ts'
 
 /** SQLite 的日期时间是文字：用 strftime 取整，结果仍是 'YYYY-MM-DD HH:MM:SS' */
 function dateTrunc(x: string, unit: string): string {

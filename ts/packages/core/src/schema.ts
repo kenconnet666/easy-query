@@ -205,7 +205,7 @@ export function utcText(d: Date): string {
 
 /**
  * 驱动读出的日期时间 → Date（无时区的文字按 UTC 读）。
- * 导出给 @eqts/date 等扩展列类型复用，保证各种日期类型"驱动值怎么读"的口径一致。
+ * 导出给 @zerodep-dev/easy-query-ts-date 等扩展列类型复用，保证各种日期类型"驱动值怎么读"的口径一致。
  */
 export function toDate(raw: unknown): Date {
   if (raw instanceof Date) return raw
@@ -281,7 +281,7 @@ export const col = {
     const decode = (r: unknown): V => (mode === 'bigint' ? BigInt(r as string) : mode === 'string' ? String(r) : toNumber(r)) as V
     return base(codec<V>('bigint', decode))
   },
-  /** 精确小数：JS 里是数值文字（DecimalText），不经过浮点；要对象形式可用 @eqts/decimal 的 decimalJs() */
+  /** 精确小数：JS 里是数值文字（DecimalText），不经过浮点；要对象形式可用 @zerodep-dev/easy-query-ts-decimal 的 decimalJs() */
   decimal: (precision?: number, scale?: number) => base(codec<DecimalText>('decimal', (r) => String(r) as DecimalText), { precision, scale }),
   double: () => base(codec<number>('double', (r) => Number(r))),
   /** 绑定时交给方言转换（SQLite / MySQL 写 1 / 0，PG 原样传布尔） */

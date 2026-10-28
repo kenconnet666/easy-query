@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { col, defineSchema, entity } from '@eqts/core'
+import { col, defineSchema, entity } from '@zerodep-dev/easy-query-ts'
 import { Post, User } from '../src/fixture.ts'
 import { memoryDb } from '../src/sqlite-env.ts'
 

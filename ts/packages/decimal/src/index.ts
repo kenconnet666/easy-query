@@ -4,7 +4,7 @@
  *
  * ```ts
  * import { Decimal } from 'decimal.js'
- * import { decimalJs } from '@eqts/decimal'
+ * import { decimalJs } from '@zerodep-dev/easy-query-ts-decimal'
  *
  * const Order = entity('t_order', { id: col.bigint().primaryKey().generated(), amount: decimalJs(12, 2) })
  * await db.insert(Order).values({ amount: new Decimal('10.50') }).execute()
@@ -13,9 +13,9 @@
  * ```
  */
 import { Decimal } from 'decimal.js'
-import { col } from '@eqts/core'
+import { col } from '@zerodep-dev/easy-query-ts'
 
-declare module '@eqts/core' {
+declare module '@zerodep-dev/easy-query-ts' {
   /** 让 plus / minus / times / div、sum / avg 可以用在 Decimal 列上 */
   interface NumericExtensions {
     decimalJs: Decimal

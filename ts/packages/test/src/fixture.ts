@@ -1,9 +1,9 @@
 /**
  * 各方言共用的测试实体与种子数据。建表语句各方言自己写（类型不同），列名一致。
  */
-import { col, defineSchema, entity, type Adapter, type Db, type Statement } from '@eqts/core'
-import { calendarDate, calendarDateTime, timeOfDay, zonedDateTime } from '@eqts/date'
-import { decimalJs } from '@eqts/decimal'
+import { col, defineSchema, entity, type Adapter, type Db, type Statement } from '@zerodep-dev/easy-query-ts'
+import { calendarDate, calendarDateTime, timeOfDay, zonedDateTime } from '@zerodep-dev/easy-query-ts-date'
+import { decimalJs } from '@zerodep-dev/easy-query-ts-decimal'
 
 export const Company = entity('t_company', {
   id: col.bigint().primaryKey().generated(),

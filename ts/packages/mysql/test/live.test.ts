@@ -5,10 +5,10 @@
  */
 import { after, describe, it } from 'node:test'
 import { createPool, type Pool } from 'mysql2/promise'
-import { createDb, type Statement } from '@eqts/core'
+import { createDb, type Statement } from '@zerodep-dev/easy-query-ts'
 import assert from 'node:assert/strict'
-import { Post, schema, seed, User, type TestEnv } from '@eqts/test/fixture'
-import { liveSuite } from '@eqts/test/suite'
+import { Post, schema, seed, User, type TestEnv } from '@zerodep-dev/easy-query-ts-test/fixture'
+import { liveSuite } from '@zerodep-dev/easy-query-ts-test/suite'
 import { MySQL, mysql } from '../src/index.ts'
 
 const DDL = [
@@ -17,7 +17,7 @@ const DDL = [
   'CREATE TABLE t_user (id BIGINT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL, age INT, company_id BIGINT, attrs JSON NOT NULL, created_at DATETIME(3) NOT NULL)',
   'CREATE TABLE t_post (id BIGINT AUTO_INCREMENT PRIMARY KEY, user_id BIGINT NOT NULL, title VARCHAR(200) NOT NULL, amount DECIMAL(12,2) NOT NULL, FULLTEXT KEY ft_title (title))',
   'CREATE TABLE t_comment (id BIGINT AUTO_INCREMENT PRIMARY KEY, post_id BIGINT NOT NULL, body VARCHAR(200) NOT NULL)',
-  // t_ext：@eqts/decimal、@eqts/date 与 64 位整数的往返
+  // t_ext：@zerodep-dev/easy-query-ts-decimal、@zerodep-dev/easy-query-ts-date 与 64 位整数的往返
   'CREATE TABLE t_ext (id BIGINT AUTO_INCREMENT PRIMARY KEY, amount DECIMAL(12,2) NOT NULL, big BIGINT NOT NULL, day DATE NOT NULL, starts_at DATETIME(3) NOT NULL, at DATETIME(3) NOT NULL, clock TIME NOT NULL, raw BLOB NOT NULL)',
   // 多对多与复合外键
   'CREATE TABLE t_role (id BIGINT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(100) NOT NULL)',

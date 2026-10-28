@@ -6,7 +6,7 @@
  * ```
  * 生成带 {@code pg.} 前缀的函数节点，只有 PG 方言认得；用在别的方言上 toSQL 时报不支持。
  */
-import { and, codecs, dialectFn, or, type Expr, type FunctionRenderer, type Node, type Pred } from '@eqts/core'
+import { and, codecs, dialectFn, or, type Expr, type FunctionRenderer, type Node, type Pred } from '@zerodep-dev/easy-query-ts'
 
 const pred = (name: string, args: unknown[]): Pred => dialectFn<boolean>(name, args, codecs.boolean)
 

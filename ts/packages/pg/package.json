@@ -1,8 +1,24 @@
 {
-  "name": "@eqts/pg",
+  "name": "@zerodep-dev/easy-query-ts-pg",
   "version": "0.1.0",
-  "private": true,
-  "type": "module",
+  "description": "PostgreSQL adapter (pg) for @zerodep-dev/easy-query-ts",
+  "license": "Apache-2.0",
+  "author": "lionheart (https://github.com/kenconnet666)",
+  "homepage": "https://github.com/kenconnet666/easy-query/tree/main/ts#readme",
+  "bugs": {
+    "url": "https://github.com/kenconnet666/easy-query/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kenconnet666/easy-query.git",
+    "directory": "ts/packages/pg"
+  },
+  "keywords": [
+    "postgres",
+    "postgresql",
+    "orm",
+    "easy-query"
+  ],
   "exports": {
     ".": "./src/index.ts"
   },
@@ -18,17 +34,23 @@
       }
     },
     "main": "./dist/index.js",
-    "types": "./dist/index.d.ts"
-  },
-  "dependencies": {
-    "@eqts/core": "workspace:*"
+    "types": "./dist/index.d.ts",
+    "access": "public"
   },
   "peerDependencies": {
+    "@zerodep-dev/easy-query-ts": "workspace:^",
     "pg": "^8.11.0"
   },
   "devDependencies": {
-    "@eqts/test": "workspace:*",
+    "@zerodep-dev/easy-query-ts": "workspace:*",
+    "@zerodep-dev/easy-query-ts-test": "workspace:*",
     "@types/pg": "8.11.10",
     "pg": "8.13.1"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "prepack": "tsc -b tsconfig.build.json"
   }
 }

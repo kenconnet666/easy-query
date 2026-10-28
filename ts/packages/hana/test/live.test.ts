@@ -3,9 +3,9 @@
  */
 import { after, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { createDb, type Statement } from '@eqts/core'
-import { Post, schema, seed, type TestEnv } from '@eqts/test/fixture'
-import { liveSuite } from '@eqts/test/suite'
+import { createDb, type Statement } from '@zerodep-dev/easy-query-ts'
+import { Post, schema, seed, type TestEnv } from '@zerodep-dev/easy-query-ts-test/fixture'
+import { liveSuite } from '@zerodep-dev/easy-query-ts-test/suite'
 import { closeHana, Hana, hana } from '../src/index.ts'
 
 const TABLES = ['t_comment', 't_post', 't_user', 't_company']

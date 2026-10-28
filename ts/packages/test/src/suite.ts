@@ -3,7 +3,7 @@
  */
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { and, caseWhen, createDb, defineSchema, defineView, or, touch, win, type Expr, type ExecutionEvent, type Interceptor } from '@eqts/core'
+import { and, caseWhen, createDb, defineSchema, defineView, or, touch, win, type Expr, type ExecutionEvent, type Interceptor } from '@zerodep-dev/easy-query-ts'
 import { CalendarDateTime, fromDate, parseDate, Time } from '@internationalized/date'
 import { Decimal } from 'decimal.js'
 import { Comment, Company, Doc, Ext, Gadget, Member, Note, Post, Role, schema, seed, User, UserRole, type TestEnv } from './fixture.ts'

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import type { Pool } from 'pg'
-import { createDb } from '@eqts/core'
-import { Gadget, schema, User } from '@eqts/test/fixture'
+import { createDb } from '@zerodep-dev/easy-query-ts'
+import { Gadget, schema, User } from '@zerodep-dev/easy-query-ts-test/fixture'
 import { postgres } from '../src/index.ts'
 
 describe('postgres: SQL text', () => {

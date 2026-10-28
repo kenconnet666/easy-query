@@ -5,7 +5,7 @@
 const N = 50
 const lines: string[] = [
   '// 由 tools/gen-stress.ts 生成，勿手改。T0：50 个实体、互相引用的关系、5 层导航，tsc 不报实例化过深。',
-  "import { col, createDb, defineSchema, entity, type Adapter } from '@eqts/core'",
+  "import { col, createDb, defineSchema, entity, type Adapter } from '@zerodep-dev/easy-query-ts'",
   '',
 ]
 for (let i = 0; i < N; i++) {

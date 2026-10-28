@@ -6,7 +6,7 @@
  * 生成的是带 {@code mysql.} 前缀的函数节点，只有 MySQL 方言的函数表认得；用在别的方言上 toSQL 时报
  * "function 'mysql.json_contains' is not supported by the postgres dialect"。
  */
-import { codecs, dialectFn, type Expr, type FunctionRenderer, type Pred } from '@eqts/core'
+import { codecs, dialectFn, type Expr, type FunctionRenderer, type Pred } from '@zerodep-dev/easy-query-ts'
 
 const fn = (name: string, args: unknown[]): Pred => dialectFn<boolean>(name, args, codecs.boolean)
 

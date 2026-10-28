@@ -32,15 +32,15 @@ export function isSubquery(value: unknown): value is Subquery<unknown> {
 export type Operand<T> = NonNullable<T> | Expr<NonNullable<T>> | Expr<T> | Expr<NonNullable<T> | null> | Subquery<NonNullable<T>> | Subquery<NonNullable<T> | null>
 
 /**
- * 第三方数值类型的登记处。@eqts/decimal 之类的扩展包用声明合并把自己的类型加进来，
+ * 第三方数值类型的登记处。@zerodep-dev/easy-query-ts-decimal 之类的扩展包用声明合并把自己的类型加进来，
  * 之后算术、sum / avg、窗口函数就自动认这个类型，核心不依赖任何第三方库：
  * ```ts
- * declare module '@eqts/core' { interface NumericExtensions { decimalJs: Decimal } }
+ * declare module '@zerodep-dev/easy-query-ts' { interface NumericExtensions { decimalJs: Decimal } }
  * ```
  */
 export interface NumericExtensions {}
 
-/** 第三方日期时间类型的登记处，用法同 NumericExtensions（@eqts/date 登记 CalendarDate 等） */
+/** 第三方日期时间类型的登记处，用法同 NumericExtensions（@zerodep-dev/easy-query-ts-date 登记 CalendarDate 等） */
 export interface TemporalExtensions {}
 
 /** 可以做算术与 sum / avg 的值类型 */

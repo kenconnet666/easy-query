@@ -40,7 +40,7 @@ fork 自 [dromara/easy-query](https://github.com/dromara/easy-query)，软 fork�
 
 ## TS 版
 
-[ts/README.md](../../ts/README.md)：`@eqts/core` 与 sqlite、mysql、pg、hana 四个适配包。
+[ts/README.md](../../ts/README.md)：`@zerodep-dev/easy-query-ts` 与 sqlite、mysql、pg、hana 四个适配包。
 
 ## 代码在哪
 
@@ -67,4 +67,4 @@ fork 自 [dromara/easy-query](https://github.com/dromara/easy-query)，软 fork�
 | 列修饰器：逻辑删除、乐观锁、默认值、枚举、品牌类型、加密 | [ts-column-rules.md](features/ts-column-rules.md) |
 | 多对多导航（经中间表）与复合外键 | [ts-relations.md](features/ts-relations.md) |
 | 显式 join（innerJoin / leftJoin，多表 lambda、自连接、分组聚合） | [ts-joins.md](features/ts-joins.md) |
-| 独立测试模块 `@eqts/test` | [ts/packages/test/README.md](../../ts/packages/test/README.md) |
+| 独立测试模块 `@zerodep-dev/easy-query-ts-test` | [ts/packages/test/README.md](../../ts/packages/test/README.md) |

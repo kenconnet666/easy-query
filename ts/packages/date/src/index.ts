@@ -3,7 +3,7 @@
  * 核心不依赖这个库；这个包只提供列定义，并用声明合并让 `year() / month() / day()` 认得这些类型。
  *
  * ```ts
- * import { calendarDate, calendarDateTime, zonedDateTime, timeOfDay } from '@eqts/date'
+ * import { calendarDate, calendarDateTime, zonedDateTime, timeOfDay } from '@zerodep-dev/easy-query-ts-date'
  *
  * const Event = entity('t_event', {
  *   id: col.bigint().primaryKey().generated(),
@@ -16,9 +16,9 @@
  * ```
  */
 import { CalendarDate, CalendarDateTime, fromDate, parseDate, Time, type ZonedDateTime } from '@internationalized/date'
-import { col, toDate, toDateText, utcText } from '@eqts/core'
+import { col, toDate, toDateText, utcText } from '@zerodep-dev/easy-query-ts'
 
-declare module '@eqts/core' {
+declare module '@zerodep-dev/easy-query-ts' {
   /** 让 year() / month() / day() 可以用在这些类型的列上 */
   interface TemporalExtensions {
     calendarDate: CalendarDate

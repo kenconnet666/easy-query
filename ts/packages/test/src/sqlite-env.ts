@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
-import { createDb, type Statement } from '@eqts/core'
+import { createDb, type Statement } from '@zerodep-dev/easy-query-ts'
 import { schema, type TestEnv } from './fixture.ts'
-import { sqlite } from '@eqts/sqlite'
+import { sqlite } from '@zerodep-dev/easy-query-ts-sqlite'
 
 const DDL = `
 CREATE TABLE t_company (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL);
@@ -11,7 +11,7 @@ CREATE TABLE t_post (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT N
 CREATE TABLE t_comment (id INTEGER PRIMARY KEY AUTOINCREMENT, post_id INTEGER NOT NULL, body TEXT NOT NULL);
 -- 列修饰器
 CREATE TABLE t_doc (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'draft', deleted INTEGER NOT NULL, version INTEGER NOT NULL, created_by TEXT NOT NULL, token TEXT NOT NULL, updated_at TEXT, secret TEXT NOT NULL);
--- t_ext：@eqts/decimal、@eqts/date 与 64 位整数的往返
+-- t_ext：@zerodep-dev/easy-query-ts-decimal、@zerodep-dev/easy-query-ts-date 与 64 位整数的往返
 CREATE TABLE t_ext (id INTEGER PRIMARY KEY AUTOINCREMENT, amount NUMERIC(12,2) NOT NULL, big INTEGER NOT NULL, day TEXT NOT NULL, starts_at TEXT NOT NULL, at TEXT NOT NULL, clock TEXT NOT NULL, raw BLOB NOT NULL);
 -- 多对多与复合外键
 CREATE TABLE t_role (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL);

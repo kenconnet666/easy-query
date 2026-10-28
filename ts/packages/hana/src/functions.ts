@@ -5,7 +5,7 @@
  * ```
  * 列上要有 FULLTEXT INDEX，否则 CONTAINS 按整列值匹配。生成带 {@code hana.} 前缀的函数节点，别的方言 toSQL 时报不支持。
  */
-import { codecs, dialectFn, type Expr, type FunctionRenderer, type Pred } from '@eqts/core'
+import { codecs, dialectFn, type Expr, type FunctionRenderer, type Pred } from '@zerodep-dev/easy-query-ts'
 
 export const Hana = {
   text: (...columns: Expr<string | null>[]) => {

@@ -6,9 +6,9 @@
 import { after, describe, it } from 'node:test'
 import pg from 'pg'
 import assert from 'node:assert/strict'
-import { createDb, sql, type Statement } from '@eqts/core'
-import { Post, schema, seed, User, type TestEnv } from '@eqts/test/fixture'
-import { liveSuite } from '@eqts/test/suite'
+import { createDb, sql, type Statement } from '@zerodep-dev/easy-query-ts'
+import { Post, schema, seed, User, type TestEnv } from '@zerodep-dev/easy-query-ts-test/fixture'
+import { liveSuite } from '@zerodep-dev/easy-query-ts-test/suite'
 import { Pg, postgres } from '../src/index.ts'
 
 const DDL = [
@@ -18,7 +18,7 @@ const DDL = [
   'CREATE TABLE t_user (id BIGSERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, age INT, company_id BIGINT, attrs JSONB NOT NULL, created_at TIMESTAMP(3) NOT NULL)',
   'CREATE TABLE t_post (id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, title VARCHAR(200) NOT NULL, amount NUMERIC(12,2) NOT NULL)',
   'CREATE TABLE t_comment (id BIGSERIAL PRIMARY KEY, post_id BIGINT NOT NULL, body VARCHAR(200) NOT NULL)',
-  // t_ext：@eqts/decimal、@eqts/date 与 64 位整数的往返
+  // t_ext：@zerodep-dev/easy-query-ts-decimal、@zerodep-dev/easy-query-ts-date 与 64 位整数的往返
   'CREATE TABLE t_ext (id BIGSERIAL PRIMARY KEY, amount NUMERIC(12,2) NOT NULL, big BIGINT NOT NULL, day DATE NOT NULL, starts_at TIMESTAMP(3) NOT NULL, at TIMESTAMP(3) NOT NULL, clock TIME NOT NULL, raw BYTEA NOT NULL)',
   // 多对多与复合外键
   'CREATE TABLE t_role (id BIGSERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL)',
