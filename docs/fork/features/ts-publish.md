@@ -49,6 +49,12 @@ pnpm run check          # typecheck + build + test
    需要已登录的账号（`npm whoami`）和二次验证码。已发布的版本不能覆盖，npm 的撤销也有严格限制。
 4. 发布后打 tag。**仓库的 `release.yml` 由 tag 触发**，tag 名先对照它的触发规则，别误触发 Java 的发布。
 
+## 发布记录
+
+- 2026-10-28：7 个包的 `0.1.0` 发布到 npm（先 `next`，npm 首发时自动把 `latest` 也指向它），随后从真实仓库在干净项目里安装、运行并做类型检查通过。刚发布的包在公共仓库上有几分钟的传播延迟（期间 `npm install` 会 404，已认证的 `npm access list packages` 能看到）。
+- 发布用的是环境里的 `NPM_TOKEN`，没有要求二次验证码。
+- Maven：`3.3.1-zd.1` 已在 Central（2026-10-28 11:13 UTC+8 发布）；Central 不允许覆盖已发布版本，重复部署会报 `Component … already exists`。下次有 Java 改动要发，先用 `tools/zerodep/release.sh 3.3.1-zd.2` 升版本。springboot4 starter 要用 JDK 17 单独部署。
+
 ## 已验证
 
 把 7 个包用 `pnpm pack` 打成 tarball，在干净目录里 `npm install`：Node 直接 `import` 全部包并跑通 SQLite 的建表 + 插入 + `sum`（Decimal、CalendarDate 往返），核心只有一份；用 TypeScript 5.9 做消费者，类型检查通过。`@zerodep-dev/easy-query-ts*` 这些名字在 npm 上尚未被占用，`@zerodep-dev` 组织属于维护者。
